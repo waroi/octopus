@@ -1,0 +1,25 @@
+{
+  "name": "octopus",
+  "version": "0.0.0",
+  "devDependencies": {
+    "turbo": "^2"
+  },
+  "packageManager": "bun@1.3.4",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "clean": "turbo clean",
+    "db:generate": "bun --filter @octopus/db db:generate",
+    "db:migrate": "bun --filter @octopus/db db:migrate",
+    "db:push": "bun --filter @octopus/db db:push",
+    "db:studio": "bun --filter @octopus/db db:studio"
+  },
+  "trustedDependencies": [
+    "@prisma/engines",
+    "prisma"
+  ],
+  "workspaces": ["apps/*", "packages/*", "tools/*"]
+}

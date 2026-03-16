@@ -1,0 +1,613 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  onboardingCompleted Boolean @default(false)
+  onboardingStep      Int     @default(0)
+
+  bannedAt     DateTime?
+  bannedReason String?
+
+  sessions Session[]
+  accounts Account[]
+  organizationMembers OrganizationMember[]
+  sentInvitations     OrganizationInvitation[]
+  chatConversations   ChatConversation[]
+  favoriteRepositories FavoriteRepository[]
+  removedMembers      OrganizationMember[] @relation("RemovedByUser")
+  deletedKnowledgeDocs  KnowledgeDocument[] @relation("DeletedKnowledgeDocs")
+  knowledgeAuditLogs    KnowledgeAuditLog[]
+  createdApiTokens      OrgApiToken[] @relation("CreatedApiTokens")
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("accounts")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+
+  @@map("verifications")
+}
+
+model Organization {
+  id                   String   @id @default(cuid())
+  name                 String
+  slug                 String   @unique
+  avatarUrl            String?
+  githubInstallationId Int?     @unique
+  needsPermissionGrant Boolean  @default(false)
+  openaiApiKey         String?
+  anthropicApiKey      String?
+  cohereApiKey         String?
+  googleApiKey         String?
+  defaultModelId       String?
+  defaultEmbedModelId  String?
+  monthlySpendLimitUsd    Float?   @default(150)
+  checkFailureThreshold   String   @default("critical") // "critical" | "high" | "medium" | "none"
+  reviewsPaused           Boolean  @default(false)
+  defaultReviewConfig     Json     @default("{}")
+  stripeCustomerId        String?  @unique
+  creditBalance           Decimal  @default(0) @db.Decimal(12, 4)
+  freeCreditBalance       Decimal  @default(150) @db.Decimal(12, 4)
+  billingEmail            String?
+  bannedAt             DateTime?
+  bannedReason         String?
+  deletedAt            DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  members            OrganizationMember[]
+  invitations        OrganizationInvitation[]
+  repositories       Repository[]
+  knowledgeDocuments KnowledgeDocument[]
+  chatConversations  ChatConversation[]
+  slackIntegration      SlackIntegration?
+  collabIntegration     CollabIntegration?
+  bitbucketIntegration  BitbucketIntegration?
+  linearIntegration     LinearIntegration?
+  aiUsages           AiUsage[]
+  knowledgeAuditLogs KnowledgeAuditLog[]
+  daySummaries       DaySummary[]
+  creditTransactions CreditTransaction[]
+  autoReloadConfig   AutoReloadConfig?
+  apiTokens          OrgApiToken[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id        String    @id @default(cuid())
+  role      String    @default("member")
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  removedById String?
+  removedBy   User?  @relation("RemovedByUser", fields: [removedById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, userId])
+  @@map("organization_members")
+}
+
+model OrganizationInvitation {
+  id        String   @id @default(cuid())
+  email     String
+  role      String   @default("member") // admin | member
+  token     String   @unique @default(cuid())
+  status    String   @default("pending") // pending | accepted | expired | revoked
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  invitedById String
+  invitedBy   User @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([token])
+  @@map("organization_invitations")
+}
+
+model Repository {
+  id            String   @id @default(cuid())
+  name          String
+  fullName      String
+  provider      String   @default("github")
+  externalId    String
+  defaultBranch String   @default("main")
+  isActive      Boolean  @default(true)
+  autoReview    Boolean  @default(false)
+  installationId Int?
+  indexStatus    String   @default("pending") // pending | indexing | indexed | failed
+  indexedAt      DateTime?
+  indexedFiles   Int      @default(0)
+  totalFiles     Int      @default(0)
+  totalChunks    Int      @default(0)
+  totalVectors   Int      @default(0)
+  indexDurationMs    Int?
+  contributorCount   Int      @default(0)
+  contributors       Json     @default("[]")
+  summary        String?
+  purpose        String?
+  analysis       String?
+  analysisStatus String    @default("none")
+  analyzedAt     DateTime?
+  reviewModelId  String?
+  embedModelId   String?
+  reviewConfig   Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  pullRequests          PullRequest[]
+  collabProjectMappings CollabProjectMapping[]
+  favoritedBy           FavoriteRepository[]
+  linearTeamMappings    LinearTeamMapping[]
+
+  @@unique([provider, externalId])
+  @@index([organizationId, isActive])
+  @@index([organizationId, name])
+  @@map("repositories")
+}
+
+model PullRequest {
+  id                 String    @id @default(cuid())
+  number             Int
+  title              String
+  url                String
+  author             String
+  status             String    @default("pending") // pending | reviewing | completed | failed
+  triggerCommentId   BigInt
+  triggerCommentBody String
+  headSha            String?
+  reviewCommentId    BigInt?
+  reviewBody         String?
+  errorMessage       String?
+  mergedAt           DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  reviewIssues ReviewIssue[]
+
+  @@unique([repositoryId, number])
+  @@index([repositoryId, status])
+  @@map("pull_requests")
+}
+
+model ReviewIssue {
+  id             String    @id @default(cuid())
+  title          String
+  description    String
+  severity       String    @default("medium") // critical | high | medium | low
+  confidence     String?   // "HIGH" | "MEDIUM" | "LOW"
+  filePath       String?
+  lineNumber     Int?
+  acknowledgedAt DateTime?
+  feedback       String?   // "up" | "down" | null
+  feedbackAt     DateTime?
+  feedbackBy     String?
+  createdAt      DateTime  @default(now())
+
+  linearIssueId  String?
+  linearIssueUrl String?
+  githubIssueNumber Int?
+  githubIssueUrl    String?
+  githubCommentId   BigInt?
+
+  pullRequestId String
+  pullRequest   PullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+
+  @@index([pullRequestId])
+  @@map("review_issues")
+}
+
+model KnowledgeDocument {
+  id             String   @id @default(cuid())
+  title          String
+  content        String
+  sourceType     String   @default("paste") // "paste" | "file"
+  fileName       String?
+  status         String   @default("processing") // "processing" | "ready" | "error"
+  errorMessage   String?
+  totalChunks    Int      @default(0)
+  totalVectors   Int      @default(0)
+  processingMs   Int?
+  deletedAt      DateTime?
+  deletedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deletedBy      User?    @relation("DeletedKnowledgeDocs", fields: [deletedById], references: [id])
+  auditLogs      KnowledgeAuditLog[]
+
+  @@index([organizationId, status, deletedAt])
+  @@map("knowledge_documents")
+}
+
+model KnowledgeAuditLog {
+  id         String   @id @default(cuid())
+  action     String   // "created" | "updated" | "deleted" | "restored"
+  details    String?
+  createdAt  DateTime @default(now())
+
+  documentId     String
+  document       KnowledgeDocument @relation(fields: [documentId], references: [id])
+  userId         String
+  user           User @relation(fields: [userId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([documentId])
+  @@index([organizationId, createdAt])
+  @@map("knowledge_audit_logs")
+}
+
+model ChatConversation {
+  id        String    @id @default(cuid())
+  title     String    @default("New Chat")
+  isShared  Boolean   @default(false)
+  sharedAt  DateTime?
+  sharedById String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  userId         String
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  messages ChatMessage[]
+  chatQueue ChatQueue[]
+
+  @@index([userId, organizationId])
+  @@index([organizationId, isShared])
+  @@map("chat_conversations")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  role      String   // "user" | "assistant"
+  content   String
+  userId    String?  // sender (null = assistant or legacy messages)
+  userName  String?  // denormalized name
+  createdAt DateTime @default(now())
+
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("chat_messages")
+}
+
+model ChatQueue {
+  id             String    @id @default(cuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  userName       String
+  content        String
+  status         String    @default("waiting") // waiting | processing | completed | failed
+  createdAt      DateTime  @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  @@index([conversationId, status])
+  @@map("chat_queue")
+}
+
+model SlackIntegration {
+  id          String  @id @default(cuid())
+  teamId      String
+  teamName    String
+  accessToken String
+  botUserId   String?
+  channelId   String?
+  channelName String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  eventConfigs SlackEventConfig[]
+
+  @@map("slack_integrations")
+}
+
+model SlackEventConfig {
+  id        String  @id @default(cuid())
+  eventType String
+  enabled   Boolean @default(true)
+
+  slackIntegrationId String
+  slackIntegration   SlackIntegration @relation(fields: [slackIntegrationId], references: [id], onDelete: Cascade)
+
+  @@unique([slackIntegrationId, eventType])
+  @@map("slack_event_configs")
+}
+
+model BitbucketIntegration {
+  id             String   @id @default(cuid())
+  workspaceSlug  String
+  workspaceName  String
+  accessToken    String
+  refreshToken   String
+  tokenExpiresAt DateTime
+  scopes         String?
+  webhookUuid    String?
+  webhookSecret  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("bitbucket_integrations")
+}
+
+model CollabIntegration {
+  id              String  @id @default(cuid())
+  apiKey          String
+  baseUrl         String
+  workspaceId     String?
+  workspaceName   String?
+  isActive        Boolean @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  projectMappings CollabProjectMapping[]
+
+  @@map("collab_integrations")
+}
+
+model AiUsage {
+  id             String   @id @default(cuid())
+  provider       String   // "anthropic" | "openai" | "google"
+  model          String   // "claude-sonnet-4-20250514", "gemini-2.5-pro", etc.
+  operation      String   // "review" | "summarize-repo" | "summarize-daily" | "analyze" | "chat" | "chat-title" | "embedding"
+  inputTokens      Int
+  outputTokens     Int
+  cacheReadTokens  Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([createdAt])
+  @@map("ai_usages")
+}
+
+model CollabProjectMapping {
+  id                String @id @default(cuid())
+  collabProjectId   String
+  collabProjectName String
+
+  repositoryId       String
+  repository         Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  collabIntegrationId String
+  collabIntegration   CollabIntegration @relation(fields: [collabIntegrationId], references: [id], onDelete: Cascade)
+
+  @@unique([collabIntegrationId, repositoryId])
+  @@map("collab_project_mappings")
+}
+
+model LinearIntegration {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accessToken    String
+  workspaceId    String
+  workspaceName  String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  teamMappings   LinearTeamMapping[]
+
+  @@map("linear_integrations")
+}
+
+model LinearTeamMapping {
+  id                  String   @id @default(cuid())
+  linearTeamId        String
+  linearTeamName      String
+  linearTeamKey       String
+  repositoryId        String
+  repository          Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  linearIntegrationId String
+  linearIntegration   LinearIntegration @relation(fields: [linearIntegrationId], references: [id], onDelete: Cascade)
+
+  @@unique([linearIntegrationId, repositoryId])
+  @@map("linear_team_mappings")
+}
+
+model FavoriteRepository {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, repositoryId])
+  @@index([userId])
+  @@map("favorite_repositories")
+}
+
+model DaySummary {
+  id        String   @id @default(cuid())
+  date      String   // "2026-02-25"
+  summary   String   @db.Text
+  prCount   Int      // number of PRs included in the summary
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, date])
+  @@index([organizationId, date])
+  @@map("day_summaries")
+}
+
+model CreditTransaction {
+  id                    String   @id @default(cuid())
+  amount                Decimal  @db.Decimal(12, 4)
+  type                  String   // "purchase" | "usage" | "free_credit" | "refund" | "auto_reload"
+  description           String?
+  stripeSessionId       String?  @unique
+  receiptUrl            String?
+  balanceAfter          Decimal  @db.Decimal(12, 4)
+  createdAt             DateTime @default(now())
+  organizationId        String
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("credit_transactions")
+}
+
+model AutoReloadConfig {
+  id              String   @id @default(cuid())
+  enabled         Boolean  @default(false)
+  thresholdAmount Decimal  @db.Decimal(12, 4) @default(10)
+  reloadAmount    Decimal  @db.Decimal(12, 4) @default(50)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  organizationId  String   @unique
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("auto_reload_configs")
+}
+
+model OrgApiToken {
+  id             String    @id @default(cuid())
+  name           String
+  tokenHash      String    @unique
+  tokenPrefix    String    // "oct_abc1..." (first 8 chars for display)
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+  deletedAt      DateTime?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User @relation("CreatedApiTokens", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@map("org_api_tokens")
+}
+
+model CliAuthSession {
+  id         String   @id @default(cuid())
+  deviceCode String   @unique
+  status     String   @default("pending") // pending | approved | expired
+  token      String?  // raw token, cleared after CLI polls it
+  orgId      String?
+  orgSlug    String?
+  orgName    String?
+  userName   String?
+  userEmail  String?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([deviceCode])
+  @@map("cli_auth_sessions")
+}
+
+model AvailableModel {
+  id          String   @id @default(cuid())
+  modelId     String   @unique
+  displayName String
+  provider    String   // "anthropic" | "openai" | "google"
+  category    String   // "llm" | "embedding"
+  inputPrice  Float    // per 1M tokens, USD
+  outputPrice Float    // per 1M tokens, USD
+  isActive           Boolean  @default(true)
+  isPlatformDefault  Boolean  @default(false)
+  sortOrder          Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("available_models")
+}
+
+model SystemConfig {
+  id        String   @id @default("singleton")
+  defaultReviewConfig Json @default("{}")
+  updatedAt DateTime @updatedAt
+
+  @@map("system_config")
+}
