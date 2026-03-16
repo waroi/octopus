@@ -34,7 +34,7 @@ export function extractAllMermaidBlocks(text: string | null | undefined): Mermai
   while ((match = regex.exec(text)) !== null) {
     const code = match[1].trim();
     if (code) {
-      blocks.push({ code, type: detectDiagramType(code) });
+      blocks.push({ code: sanitizeMermaidCode(code), type: detectDiagramType(code) });
     }
   }
   return blocks;
@@ -47,7 +47,47 @@ export function extractAllMermaidBlocks(text: string | null | undefined): Mermai
 export function extractMermaidCode(text: string | null | undefined): string | null {
   if (!text) return null;
   const match = text.match(/```mermaid\n([\s\S]*?)```/);
-  return match ? match[1].trim() : null;
+  return match ? sanitizeMermaidCode(match[1].trim()) : null;
+}
+
+/**
+ * Sanitize LLM-generated mermaid code to fix common syntax issues.
+ *
+ * Fixes applied:
+ * 1. Replace literal `\n` with `<br/>` (mermaid line break) — LLMs output \n
+ *    inside node labels intending a line break, but mermaid renders it literally
+ * 2. Remove backticks inside node labels (triggers markdown mode, causes parse errors)
+ * 3. Ensure `class` statements are each on their own line
+ * 4. Remove trailing whitespace on lines
+ */
+export function sanitizeMermaidCode(code: string): string {
+  let result = code;
+
+  // 1. Replace literal \n with <br/> (mermaid line break).
+  //    Literal \n in mermaid code only appears inside node labels where the LLM
+  //    intended a line break. It's not valid mermaid syntax anywhere else.
+  result = result.replace(/\\n/g, "<br/>");
+
+  // 2. Remove backticks inside node labels (triggers markdown mode, causes parse errors)
+  result = result.replace(
+    /([\[({]["'])((?:[^"'\\]|\\.)*)(['"][\])}])/g,
+    (_match, open: string, content: string, close: string) => {
+      const fixed = content.replace(/`/g, "'");
+      return `${open}${fixed}${close}`;
+    },
+  );
+
+  // 3. Split multiple class statements crammed onto one line
+  //    e.g. "class A,B changed class C,D added" → separate lines
+  result = result.replace(
+    /^(\s*class\s+\S+\s+\w+)\s+(class\s+)/gm,
+    "$1\n    $2",
+  );
+
+  // 4. Remove trailing whitespace
+  result = result.replace(/[ \t]+$/gm, "");
+
+  return result;
 }
 
 /**

@@ -795,6 +795,36 @@ export async function processReview(pullRequestId: string): Promise<void> {
     const filesChanged = countDiffFiles(diff);
     console.log(`[reviewer] Diff fetched: ${diff.length} chars, ${filesChanged} files, tree: ${repoTree.length} files`);
 
+    // Early exit: no reviewable changes
+    if (!diff.trim()) {
+      const emptyMsg = [
+        "> 🐙 **Octopus Review** skipped this pull request.",
+        ">",
+        "> The diff is empty — there are no reviewable code changes. This can happen when:",
+        "> - The PR contains only merge commits with no new changes",
+        "> - All changed files are excluded by `.octopusignore`",
+        "> - The PR branch is already up to date with the base branch",
+        ">",
+        "> If you believe this is a mistake, please update the PR and comment `@octopus` to retry.",
+      ].join("\n");
+
+      if (reviewCommentId) {
+        await providerUpdateComment(reviewCommentId, emptyMsg);
+      } else {
+        await providerCreateComment(pr.number, emptyMsg);
+      }
+
+      if (checkRunId && isGitHub && installationId) {
+        await ghUpdateCheckRun(installationId, owner, repoName, checkRunId, "neutral", {
+          title: "No reviewable changes",
+          summary: "The diff is empty — there are no reviewable code changes.",
+        });
+      }
+
+      console.log(`[reviewer] Skipped PR #${pr.number} — empty diff`);
+      return;
+    }
+
     // Step 3: Embed diff → semantic search for codebase context
     await emitReviewStatus(org.id, {
       ...baseEvent,
@@ -988,9 +1018,12 @@ export async function processReview(pullRequestId: string): Promise<void> {
       org.id,
     );
 
-    // Fix malformed mermaid block closings: ``` merged with next line (e.g. "```### Checklist")
-    // Only match ``` followed by non-language-tag chars (uppercase, #, -, *) to preserve ```mermaid etc.
-    let reviewBody = response.text.replace(/```([^`\n\sa-z])/g, "```\n$1");
+    // Fix malformed mermaid block closings:
+    // 1. Content on same line before closing ```: "unchanged```" → "unchanged\n```"
+    let reviewBody = response.text.replace(/([^\n])```(\n|$)/g, "$1\n```$2");
+    // 2. ``` merged with next line: "```### Checklist" → "```\n\n### Checklist"
+    //    Only match ``` followed by non-language-tag chars to preserve ```mermaid etc.
+    reviewBody = reviewBody.replace(/```([^`\n\sa-z])/g, "```\n\n$1");
 
     // Prepend build artifact warning if bad files were detected in the diff
     if (badFiles.length > 0) {

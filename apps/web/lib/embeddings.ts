@@ -31,12 +31,27 @@ export async function createEmbeddings(
     ? await getEmbedModel(tracking.organizationId, tracking.repositoryId)
     : "text-embedding-3-large";
 
+  // Filter out empty/whitespace-only strings — OpenAI embeddings API rejects them
+  const validTexts: string[] = [];
+  const validIndexes: number[] = [];
+  for (let i = 0; i < texts.length; i++) {
+    const trimmed = texts[i]?.trim();
+    if (trimmed) {
+      validTexts.push(texts[i]);
+      validIndexes.push(i);
+    }
+  }
+
+  if (validTexts.length === 0) {
+    return texts.map(() => []);
+  }
+
   // OpenAI allows max 2048 inputs per request
-  const vectors: number[][] = [];
+  const validVectors: number[][] = [];
   let totalPromptTokens = 0;
 
-  for (let i = 0; i < texts.length; i += 512) {
-    const batch = texts
+  for (let i = 0; i < validTexts.length; i += 512) {
+    const batch = validTexts
       .slice(i, i + 512)
       .map((t) => (t.length > MAX_EMBEDDING_CHARS ? t.slice(0, MAX_EMBEDDING_CHARS) : t));
     const res = await client.embeddings.create({
@@ -44,9 +59,15 @@ export async function createEmbeddings(
       input: batch,
     });
     for (const item of res.data) {
-      vectors.push(item.embedding);
+      validVectors.push(item.embedding);
     }
     totalPromptTokens += res.usage.prompt_tokens;
+  }
+
+  // Map valid vectors back to original positions, empty array for filtered-out texts
+  const vectors: number[][] = texts.map(() => []);
+  for (let i = 0; i < validIndexes.length; i++) {
+    vectors[validIndexes[i]] = validVectors[i];
   }
 
   if (tracking) {
