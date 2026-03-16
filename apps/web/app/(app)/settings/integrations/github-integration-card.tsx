@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { IconBrandGithub } from "@tabler/icons-react";
 import { disconnectGitHub } from "./actions";
+import { trackEvent } from "@/lib/analytics";
 
 type GitHubData = {
   repoCount: number;
@@ -47,6 +48,7 @@ export function GitHubIntegrationCard({
             <Button asChild>
               <a
                 href={`https://github.com/apps/${appSlug}/installations/new?state=${encodeURIComponent(`${window.location.origin}/settings/integrations`)}`}
+                onClick={() => trackEvent("cta_click", { location: "settings_integrations", label: "install_github_app" })}
               >
                 <IconBrandGithub className="mr-2 size-4" />
                 Install GitHub App

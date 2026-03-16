@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Public_Sans } from "next/font/google";
+import Script from "next/script";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -32,7 +33,21 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={publicSans.variable} suppressHydrationWarning>
-      <meta name="apple-mobile-web-app-title" content="Octopus" />  
+      <head>
+        <meta name="apple-mobile-web-app-title" content="Octopus" />
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-BNFCHLD0BY"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-BNFCHLD0BY');
+          `}
+        </Script>
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
