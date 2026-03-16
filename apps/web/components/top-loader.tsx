@@ -77,7 +77,8 @@ function TopLoaderInner({ color }: { color: string }) {
     history.pushState = (...args) => {
       const url = args[2];
       if (url && String(url) !== window.location.pathname + window.location.search) {
-        start();
+        // Defer to avoid setState inside useInsertionEffect (Next.js router internals)
+        setTimeout(start, 0);
       }
       return originalPushState(...args);
     };
