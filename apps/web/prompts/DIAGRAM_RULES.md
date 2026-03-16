@@ -34,6 +34,12 @@ MERMAID SYNTAX RULES:
    - NO spaces after commas between node IDs: `class A,B,C style` NOT `class A, B, C style`
    - Use only the short node ID (the identifier before the shape bracket), never the label text.
    - Node IDs must be simple alphanumeric camelCase (no spaces, no special characters).
+   - CRITICAL: Node IDs with spaces cause "got SPACE" parse errors. The display label goes
+     in quotes inside brackets, but the ID itself MUST be a single camelCase word.
+     ✅ `GoogleSignIn["Google Sign-In"]` then `class GoogleSignIn changed`
+     ❌ `Google SignIn["Google Sign-In"]` then `class Google SignIn changed` ← PARSE ERROR
+     ✅ `GitHubCard["GitHub Card"]` then `class GitHubCard changed`
+     ❌ `GitHub Card["GitHub Card"]` then `class GitHub Card changed` ← PARSE ERROR
    ✅ Correct (each on its own line):
    ```
    class Sidebar,Resources changed

@@ -102,6 +102,18 @@ function countFindings(reviewBody: string): number {
   return matches?.length ?? 0;
 }
 
+/** Count findings from the Findings Summary table (| EMOJI ... | N |) in the review body */
+function countFindingsFromTable(reviewBody: string): number {
+  const rows = reviewBody.match(/\|\s*(?:🔴|🟠|🟡|🔵|💡)\s*[^|]*\|\s*(\d+)\s*\|/gm);
+  if (!rows) return 0;
+  let total = 0;
+  for (const row of rows) {
+    const countMatch = row.match(/\|\s*(\d+)\s*\|$/);
+    if (countMatch) total += parseInt(countMatch[1], 10);
+  }
+  return total;
+}
+
 /**
  * Parse a unified diff to get valid (file → line numbers) on the RIGHT side.
  * GitHub Reviews API only accepts comments on lines visible in the diff.
@@ -1246,7 +1258,9 @@ Output ALL findings that match the counts in your Findings Summary table. Nothin
     }
 
     // Use findings.length as the authoritative count (accounts for follow-up recovery)
-    const effectiveFindingsCount = findings.length || findingsCount;
+    // Fall back to findings summary table count if both parsed findings and regex count are 0
+    const tableFindingsCount = countFindingsFromTable(reviewBody);
+    const effectiveFindingsCount = findings.length || findingsCount || tableFindingsCount;
 
     console.log(`[reviewer] Parsed ${findings.length} findings, ${inlineComments.length} inline comments`);
 
@@ -1266,7 +1280,7 @@ Output ALL findings that match the counts in your Findings Summary table. Nothin
     if (isGitHub && installationId) {
       // GitHub: use the PR review API for inline comments
       if (inlineComments.length > 0) {
-        const summaryLine = `${filesChanged} file${filesChanged !== 1 ? "s" : ""} reviewed, ${inlineComments.length} comment${inlineComments.length !== 1 ? "s" : ""}\n\n[Octopus Review](https://github.com/apps/octopus-review)`;
+        const summaryLine = `${filesChanged} file${filesChanged !== 1 ? "s" : ""} reviewed, ${effectiveFindingsCount} finding${effectiveFindingsCount !== 1 ? "s" : ""}\n\n[Octopus Review](https://github.com/apps/octopus-review)`;
         try {
           const reviewId = await ghCreatePullRequestReview(
             installationId, owner, repoName, pr.number,
