@@ -16,6 +16,8 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.production
+.env.production.review
 
 # debug logs
 npm-debug.log*
@@ -34,8 +36,25 @@ next-env.d.ts
 *.pem
 coverage/
 
-.env.production
-.env.production.review
+# deployment
 deploy.ini
+deploy.sh
 
+# database
 *.sql
+backups/
+
+# internal docs
+docs/
+
+# internal identity files
+SOUL.md
+BOOTSTRAP.md
+IDENTITY.md
+HEARTBEAT.md
+
+# backup files
+*.backup.*
+
+# openclaw
+.openclaw/

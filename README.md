@@ -99,6 +99,14 @@ bun run db:studio        # Open Prisma Studio
 4. **Review** — The PR diff is reviewed by the LLM, generating findings with severity levels
 5. **Comment** — Findings are posted as inline comments on the PR
 
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Security
+
+Please see [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
+
 ## License
 
-Proprietary. All rights reserved.
+This project is licensed under the [MIT License](LICENSE.md).
