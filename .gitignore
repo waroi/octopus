@@ -56,5 +56,9 @@ HEARTBEAT.md
 # backup files
 *.backup.*
 
+# claude code commands
+.claude/commands/
+.claude/settings.local.json
+
 # openclaw
 .openclaw/
