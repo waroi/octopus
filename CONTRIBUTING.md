@@ -49,4 +49,4 @@ The CI pipeline runs these checks automatically on every pull request.
 
 ## Questions?
 
-Open a [GitHub Discussion](https://github.com/octopus-review/octopus/discussions) if you have questions or need help.
+Open a [GitHub Discussion](https://github.com/octopusreview/octopus/discussions) if you have questions or need help.

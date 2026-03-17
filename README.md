@@ -3,9 +3,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/octopus-review/octopus/actions/workflows/ci.yml"><img src="https://github.com/octopus-review/octopus/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/octopusreview/octopus/actions/workflows/ci.yml"><img src="https://github.com/octopusreview/octopus/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE.md"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
-  <a href="https://github.com/octopus-review/octopus/discussions"><img src="https://img.shields.io/github/discussions/octopus-review/octopus" alt="GitHub Discussions" /></a>
+  <a href="https://github.com/octopusreview/octopus/discussions"><img src="https://img.shields.io/github/discussions/octopusreview/octopus" alt="GitHub Discussions" /></a>
 </p>
 
 # Octopus
@@ -65,7 +65,7 @@ octopus/
 
 ```bash
 # Clone the repository
-git clone https://github.com/octopus-review/octopus.git
+git clone https://github.com/octopusreview/octopus.git
 cd octopus
 
 # Install dependencies
@@ -105,7 +105,7 @@ bun run db:studio        # Open Prisma Studio
 
 ```bash
 # Clone and configure
-git clone https://github.com/octopus-review/octopus.git
+git clone https://github.com/octopusreview/octopus.git
 cd octopus
 cp .env.example .env
 # Edit .env with your API keys and configuration

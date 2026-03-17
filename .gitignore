@@ -45,7 +45,7 @@ deploy.sh
 backups/
 
 # internal docs
-docs/
+documents/
 
 # internal identity files
 SOUL.md
