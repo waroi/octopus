@@ -55,7 +55,7 @@ octopus/
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/octopus.git
+git clone https://github.com/octopus-review/octopus.git
 cd octopus
 
 # Install dependencies

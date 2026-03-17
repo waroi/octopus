@@ -10,7 +10,7 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 
-const KEEP_EMAIL = "admin@example.com";
+const KEEP_EMAIL = process.env.SEED_USER_EMAIL || "admin@example.com";
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 function cuid() {
@@ -90,7 +90,7 @@ async function main() {
   const org = await prisma.organization.create({
     data: {
       id: orgId,
-      name: "Acme",
+      name: "Acme Inc",
       slug: "acme-inc",
       githubInstallationId: 58201347,
       needsPermissionGrant: false,
@@ -129,9 +129,9 @@ async function main() {
       contributorCount: 4,
       contributors: JSON.stringify([
         { login: "alice-dev", avatarUrl: "https://avatars.githubusercontent.com/u/12345678?v=4", contributions: 187 },
-        { login: "alexdev", avatarUrl: "https://avatars.githubusercontent.com/u/23456789?v=4", contributions: 94 },
-        { login: "selin-k", avatarUrl: "https://avatars.githubusercontent.com/u/34567890?v=4", contributions: 62 },
-        { login: "emreozcan", avatarUrl: "https://avatars.githubusercontent.com/u/45678901?v=4", contributions: 38 },
+        { login: "bob-dev", avatarUrl: "https://avatars.githubusercontent.com/u/23456789?v=4", contributions: 94 },
+        { login: "carol-dev", avatarUrl: "https://avatars.githubusercontent.com/u/34567890?v=4", contributions: 62 },
+        { login: "dave-dev", avatarUrl: "https://avatars.githubusercontent.com/u/45678901?v=4", contributions: 38 },
       ]),
       summary: "AI-powered code review platform that automates pull request analysis, provides intelligent code insights, and integrates with GitHub/Bitbucket workflows.",
       purpose: "Helps development teams ship higher quality code faster by catching bugs, security vulnerabilities, and architectural issues before they reach production.",
@@ -160,10 +160,10 @@ async function main() {
       contributorCount: 5,
       contributors: JSON.stringify([
         { login: "alice-dev", avatarUrl: "https://avatars.githubusercontent.com/u/12345678?v=4", contributions: 312 },
-        { login: "burak-dev", avatarUrl: "https://avatars.githubusercontent.com/u/56789012?v=4", contributions: 156 },
-        { login: "alexdev", avatarUrl: "https://avatars.githubusercontent.com/u/23456789?v=4", contributions: 89 },
-        { login: "selin-k", avatarUrl: "https://avatars.githubusercontent.com/u/34567890?v=4", contributions: 73 },
-        { login: "melis-h", avatarUrl: "https://avatars.githubusercontent.com/u/67890123?v=4", contributions: 41 },
+        { login: "eve-dev", avatarUrl: "https://avatars.githubusercontent.com/u/56789012?v=4", contributions: 156 },
+        { login: "bob-dev", avatarUrl: "https://avatars.githubusercontent.com/u/23456789?v=4", contributions: 89 },
+        { login: "carol-dev", avatarUrl: "https://avatars.githubusercontent.com/u/34567890?v=4", contributions: 73 },
+        { login: "frank-dev", avatarUrl: "https://avatars.githubusercontent.com/u/67890123?v=4", contributions: 41 },
       ]),
       summary: "Core REST API powering the Acme platform — handles user management, billing, workspace orchestration, and third-party integrations.",
       purpose: "Central backend service that exposes a unified API for all Acme client applications and internal microservices.",
@@ -191,12 +191,12 @@ async function main() {
       indexDurationMs: 52400,
       contributorCount: 6,
       contributors: JSON.stringify([
-        { login: "selin-k", avatarUrl: "https://avatars.githubusercontent.com/u/34567890?v=4", contributions: 245 },
+        { login: "carol-dev", avatarUrl: "https://avatars.githubusercontent.com/u/34567890?v=4", contributions: 245 },
         { login: "alice-dev", avatarUrl: "https://avatars.githubusercontent.com/u/12345678?v=4", contributions: 198 },
-        { login: "emreozcan", avatarUrl: "https://avatars.githubusercontent.com/u/45678901?v=4", contributions: 134 },
-        { login: "melis-h", avatarUrl: "https://avatars.githubusercontent.com/u/67890123?v=4", contributions: 97 },
-        { login: "burak-dev", avatarUrl: "https://avatars.githubusercontent.com/u/56789012?v=4", contributions: 76 },
-        { login: "alexdev", avatarUrl: "https://avatars.githubusercontent.com/u/23456789?v=4", contributions: 52 },
+        { login: "dave-dev", avatarUrl: "https://avatars.githubusercontent.com/u/45678901?v=4", contributions: 134 },
+        { login: "frank-dev", avatarUrl: "https://avatars.githubusercontent.com/u/67890123?v=4", contributions: 97 },
+        { login: "eve-dev", avatarUrl: "https://avatars.githubusercontent.com/u/56789012?v=4", contributions: 76 },
+        { login: "bob-dev", avatarUrl: "https://avatars.githubusercontent.com/u/23456789?v=4", contributions: 52 },
       ]),
       summary: "Modern React-based web application for the Acme platform — built with Next.js 15, featuring SSR, real-time collaboration, and responsive design.",
       purpose: "Primary user-facing interface providing workspace management, project dashboards, real-time chat, and analytics visualizations.",
@@ -225,7 +225,7 @@ async function main() {
       contributorCount: 2,
       contributors: JSON.stringify([
         { login: "alice-dev", avatarUrl: "https://avatars.githubusercontent.com/u/12345678?v=4", contributions: 89 },
-        { login: "burak-dev", avatarUrl: "https://avatars.githubusercontent.com/u/56789012?v=4", contributions: 34 },
+        { login: "eve-dev", avatarUrl: "https://avatars.githubusercontent.com/u/56789012?v=4", contributions: 34 },
       ]),
       summary: "Infrastructure-as-code repository managing AWS resources, Docker configurations, CI/CD pipelines, and monitoring setup using Terraform and Pulumi.",
       purpose: "Single source of truth for all Acme infrastructure definitions, deployment pipelines, and operational configurations.",
@@ -251,9 +251,9 @@ async function main() {
       indexDurationMs: 18300,
       contributorCount: 3,
       contributors: JSON.stringify([
-        { login: "emreozcan", avatarUrl: "https://avatars.githubusercontent.com/u/45678901?v=4", contributions: 178 },
-        { login: "melis-h", avatarUrl: "https://avatars.githubusercontent.com/u/67890123?v=4", contributions: 112 },
-        { login: "selin-k", avatarUrl: "https://avatars.githubusercontent.com/u/34567890?v=4", contributions: 45 },
+        { login: "dave-dev", avatarUrl: "https://avatars.githubusercontent.com/u/45678901?v=4", contributions: 178 },
+        { login: "frank-dev", avatarUrl: "https://avatars.githubusercontent.com/u/67890123?v=4", contributions: 112 },
+        { login: "carol-dev", avatarUrl: "https://avatars.githubusercontent.com/u/34567890?v=4", contributions: 45 },
       ]),
       summary: "Cross-platform mobile application built with React Native and Expo — provides on-the-go access to code reviews, notifications, and team chat.",
       purpose: "Enables developers to stay connected with their team, review code, and manage tasks from their mobile devices.",
@@ -296,7 +296,7 @@ async function main() {
   // so charts show natural wave patterns, not flat lines with a spike.
   // Key: updatedAt = merge date (determines bucket), createdAt determines TTM.
 
-  const authors = ["alice-dev", "alexdev", "selin-k", "emreozcan", "burak-dev", "melis-h"];
+  const authors = ["alice-dev", "bob-dev", "carol-dev", "dave-dev", "eve-dev", "frank-dev"];
 
   const prData = [
     // ── Day 0 (today) — 3 completed + 2 in-progress ──
@@ -307,23 +307,23 @@ async function main() {
       reviewBody: "## Code Review Summary\n\n**Overall**: Critical memory leak fix.\n\n### Changes\n- Properly cleanup event listeners on reconnect\n- Added WeakRef for subscription tracking\n\n### LGTM ✅",
       mergedAt: daysAgo(0), createdAt: hoursAgo(18), repositoryId: repos[0].id, issueCount: 0 },
     { id: cuid(), number: 236, title: "feat: Add bulk webhook retry endpoint",
-      url: "https://github.com/acme-inc/backend-api/pull/236", author: "burak-dev",
+      url: "https://github.com/acme-inc/backend-api/pull/236", author: "eve-dev",
       status: "completed", triggerCommentId: BigInt(1002), triggerCommentBody: "/review",
       headSha: "b2c3d4e", reviewCommentId: BigInt(2002),
       reviewBody: "## Code Review Summary\n\n**Overall**: Clean implementation of bulk retry.\n\n### Highlights\n- Batched processing with configurable chunk size\n- Proper dead letter queue integration\n- Good error handling per-item",
       mergedAt: daysAgo(0), createdAt: hoursAgo(36), repositoryId: repos[1].id, issueCount: 1 },
     { id: cuid(), number: 180, title: "fix: Dark mode contrast issues on settings page",
-      url: "https://github.com/acme-inc/frontend-web/pull/180", author: "melis-h",
+      url: "https://github.com/acme-inc/frontend-web/pull/180", author: "frank-dev",
       status: "completed", triggerCommentId: BigInt(1003), triggerCommentBody: "/review",
       headSha: "c3d4e5f", reviewCommentId: BigInt(2003),
       reviewBody: "## Code Review Summary\n\n**Overall**: Good accessibility improvements.\n\n### Changes\n- Fixed low contrast text in dark mode\n- Updated focus ring visibility\n\n### LGTM ✅",
       mergedAt: daysAgo(0), createdAt: hoursAgo(8), repositoryId: repos[2].id, issueCount: 0 },
     { id: cuid(), number: 56, title: "feat: Add support for custom review rules per repository",
-      url: "https://github.com/acme-inc/octopus/pull/56", author: "emreozcan",
+      url: "https://github.com/acme-inc/octopus/pull/56", author: "dave-dev",
       status: "reviewing", triggerCommentId: BigInt(1004), triggerCommentBody: "/review",
       headSha: "d4e5f6g", createdAt: hoursAgo(4), repositoryId: repos[0].id, issueCount: 0 },
     { id: cuid(), number: 237, title: "feat: Add webhook retry queue with dead letter handling",
-      url: "https://github.com/acme-inc/backend-api/pull/237", author: "alexdev",
+      url: "https://github.com/acme-inc/backend-api/pull/237", author: "bob-dev",
       status: "pending", triggerCommentId: BigInt(1005), triggerCommentBody: "/review",
       headSha: "e5f6g7h", createdAt: hoursAgo(2), repositoryId: repos[1].id, issueCount: 0 },
 
@@ -335,7 +335,7 @@ async function main() {
       reviewBody: "## Code Review Summary\n\n**Overall**: Strong WebSocket integration.\n\n### Highlights\n- Clean event-driven architecture\n- Good reconnection logic\n\n### Suggestions\n- Add rate limiting for broadcasts",
       mergedAt: daysAgo(1), createdAt: daysAgo(3), repositoryId: repos[0].id, issueCount: 2 },
     { id: cuid(), number: 91, title: "fix: Infinite scroll pagination in review list",
-      url: "https://github.com/acme-inc/mobile-app/pull/91", author: "melis-h",
+      url: "https://github.com/acme-inc/mobile-app/pull/91", author: "frank-dev",
       status: "completed", triggerCommentId: BigInt(1007), triggerCommentBody: "/review",
       headSha: "g7h8i9j", reviewCommentId: BigInt(2007),
       reviewBody: "## Code Review Summary\n\n**Overall**: Good pagination fix.\n\n### Changes\n- Fixed cursor-based offset\n- Prevented duplicate fetches on fast scroll\n\n### LGTM ✅",
@@ -343,25 +343,25 @@ async function main() {
 
     // ── Day 2 — 4 completed (busy day) ──
     { id: cuid(), number: 53, title: "refactor: Extract review engine into standalone module",
-      url: "https://github.com/acme-inc/octopus/pull/53", author: "selin-k",
+      url: "https://github.com/acme-inc/octopus/pull/53", author: "carol-dev",
       status: "completed", triggerCommentId: BigInt(1008), triggerCommentBody: "/review",
       headSha: "h8i9j0k", reviewCommentId: BigInt(2008),
       reviewBody: "## Code Review Summary\n\n**Overall**: Excellent modularization.\n\n### Key Changes\n- Separated review logic from API routes\n- Clean dependency injection pattern\n- Reduced coupling between components",
       mergedAt: daysAgo(2), createdAt: daysAgo(4), repositoryId: repos[0].id, issueCount: 1 },
     { id: cuid(), number: 234, title: "feat: Workspace-level rate limiting",
-      url: "https://github.com/acme-inc/backend-api/pull/234", author: "burak-dev",
+      url: "https://github.com/acme-inc/backend-api/pull/234", author: "eve-dev",
       status: "completed", triggerCommentId: BigInt(1009), triggerCommentBody: "/review",
       headSha: "i9j0k1l", reviewCommentId: BigInt(2009),
       reviewBody: "## Code Review Summary\n\n**Overall**: Solid rate limiting.\n\n### Issues Found\n- Race condition in token refresh\n- Missing rate limit headers in 429 responses",
       mergedAt: daysAgo(2), createdAt: daysAgo(5), repositoryId: repos[1].id, issueCount: 2 },
     { id: cuid(), number: 178, title: "feat: Redesign dashboard with analytics charts",
-      url: "https://github.com/acme-inc/frontend-web/pull/178", author: "selin-k",
+      url: "https://github.com/acme-inc/frontend-web/pull/178", author: "carol-dev",
       status: "completed", triggerCommentId: BigInt(1010), triggerCommentBody: "/review",
       headSha: "j0k1l2m", reviewCommentId: BigInt(2010),
       reviewBody: "## Code Review Summary\n\n**Overall**: Beautiful dashboard redesign.\n\n### Highlights\n- Clean Recharts implementation\n- Responsive grid layout\n\n### Suggestions\n- Add data caching",
       mergedAt: daysAgo(2), createdAt: daysAgo(3), repositoryId: repos[2].id, issueCount: 1 },
     { id: cuid(), number: 90, title: "feat: Push notification deep linking",
-      url: "https://github.com/acme-inc/mobile-app/pull/90", author: "emreozcan",
+      url: "https://github.com/acme-inc/mobile-app/pull/90", author: "dave-dev",
       status: "completed", triggerCommentId: BigInt(1011), triggerCommentBody: "/review",
       headSha: "k1l2m3n", reviewCommentId: BigInt(2011),
       reviewBody: "## Code Review Summary\n\n**Overall**: Well-implemented deep linking.\n\n### Issues\n- Missing notification channel for Android 13+",
@@ -369,7 +369,7 @@ async function main() {
 
     // ── Day 3 — 1 completed (light day) ──
     { id: cuid(), number: 177, title: "fix: SSR hydration mismatch in theme provider",
-      url: "https://github.com/acme-inc/frontend-web/pull/177", author: "melis-h",
+      url: "https://github.com/acme-inc/frontend-web/pull/177", author: "frank-dev",
       status: "completed", triggerCommentId: BigInt(1012), triggerCommentBody: "/review",
       headSha: "l2m3n4o", reviewCommentId: BigInt(2012),
       reviewBody: "## Code Review Summary\n\n**Overall**: Clean hydration fix.\n\n### LGTM ✅",
@@ -377,7 +377,7 @@ async function main() {
 
     // ── Day 4 — 3 completed ──
     { id: cuid(), number: 52, title: "fix: Handle edge case in diff parser for binary files",
-      url: "https://github.com/acme-inc/octopus/pull/52", author: "alexdev",
+      url: "https://github.com/acme-inc/octopus/pull/52", author: "bob-dev",
       status: "completed", triggerCommentId: BigInt(1013), triggerCommentBody: "/review",
       headSha: "m3n4o5p", reviewCommentId: BigInt(2013),
       reviewBody: "## Code Review Summary\n\n**Overall**: Good binary file handling.\n\n### No issues found. LGTM! ✅",
@@ -389,7 +389,7 @@ async function main() {
       reviewBody: "## Code Review Summary\n\n**Overall**: Critical bug fix.\n\n### Changes\n- Added distributed lock using Redis SETNX\n- Exponential backoff for retry\n\n### LGTM ✅",
       mergedAt: daysAgo(4), createdAt: daysAgo(6), repositoryId: repos[1].id, issueCount: 1 },
     { id: cuid(), number: 89, title: "feat: Push notification support for reviews",
-      url: "https://github.com/acme-inc/mobile-app/pull/89", author: "emreozcan",
+      url: "https://github.com/acme-inc/mobile-app/pull/89", author: "dave-dev",
       status: "completed", triggerCommentId: BigInt(1015), triggerCommentBody: "/review",
       headSha: "o5p6q7r", reviewCommentId: BigInt(2015),
       reviewBody: "## Code Review Summary\n\n**Overall**: Well-implemented push notifications.\n\n### Issues\n- Missing Android 13+ notification channel\n- No notification grouping",
@@ -397,13 +397,13 @@ async function main() {
 
     // ── Day 5 — 2 completed ──
     { id: cuid(), number: 51, title: "refactor: Migrate review engine to streaming responses",
-      url: "https://github.com/acme-inc/octopus/pull/51", author: "selin-k",
+      url: "https://github.com/acme-inc/octopus/pull/51", author: "carol-dev",
       status: "completed", triggerCommentId: BigInt(1016), triggerCommentBody: "/review",
       headSha: "p6q7r8s", reviewCommentId: BigInt(2016),
       reviewBody: "## Code Review Summary\n\n**Overall**: Excellent streaming refactoring.\n\n### Minor Issues\n- Consider backpressure handling",
       mergedAt: daysAgo(5), createdAt: daysAgo(7), repositoryId: repos[0].id, issueCount: 1 },
     { id: cuid(), number: 176, title: "feat: Add loading skeletons for all pages",
-      url: "https://github.com/acme-inc/frontend-web/pull/176", author: "melis-h",
+      url: "https://github.com/acme-inc/frontend-web/pull/176", author: "frank-dev",
       status: "completed", triggerCommentId: BigInt(1017), triggerCommentBody: "/review",
       headSha: "q7r8s9t", reviewCommentId: BigInt(2017),
       reviewBody: "## Code Review Summary\n\n**Overall**: Nice UX improvement.\n\n### LGTM ✅",
@@ -417,13 +417,13 @@ async function main() {
       reviewBody: "## Code Review Summary\n\n**Overall**: Great feature addition.\n\n### Suggestions\n- Add caching for generated diagrams\n- Consider lazy rendering",
       mergedAt: daysAgo(6), createdAt: daysAgo(8), repositoryId: repos[0].id, issueCount: 2 },
     { id: cuid(), number: 232, title: "feat: Add workspace settings API",
-      url: "https://github.com/acme-inc/backend-api/pull/232", author: "alexdev",
+      url: "https://github.com/acme-inc/backend-api/pull/232", author: "bob-dev",
       status: "completed", triggerCommentId: BigInt(1019), triggerCommentBody: "/review",
       headSha: "s9t0u1v", reviewCommentId: BigInt(2019),
       reviewBody: "## Code Review Summary\n\n**Overall**: Clean API design.\n\n### Issues\n- Missing input validation on PATCH endpoint",
       mergedAt: daysAgo(6), createdAt: daysAgo(7), repositoryId: repos[1].id, issueCount: 1 },
     { id: cuid(), number: 88, title: "fix: Camera permission crash on Android 12",
-      url: "https://github.com/acme-inc/mobile-app/pull/88", author: "emreozcan",
+      url: "https://github.com/acme-inc/mobile-app/pull/88", author: "dave-dev",
       status: "completed", triggerCommentId: BigInt(1020), triggerCommentBody: "/review",
       headSha: "t0u1v2w", reviewCommentId: BigInt(2020),
       reviewBody: "## Code Review Summary\n\n**Overall**: Good platform-specific fix.\n\n### LGTM ✅",
@@ -673,21 +673,21 @@ async function main() {
     {
       id: cuid(),
       date: formatDate(daysAgo(1)),
-      summary: "## Daily Development Summary — " + formatDate(daysAgo(1)) + "\n\n### Highlights\n- **3 PRs merged** across octopus, backend-api, and mobile-app\n- Real-time WebSocket support landed in octopus (#52) — reviews now update live\n- Rate limiting implementation merged for backend-api (#234)\n- Mobile infinite scroll bug fixed (#90)\n\n### Review Activity\n- 4 code reviews completed\n- 2 high-severity issues identified (memory leak in WebSocket hooks, race condition in rate limiter)\n- 1 PR still in review: custom review rules feature (#53)\n\n### Contributors\n- **alice-dev**: 2 PRs (WebSocket integration, OAuth fix)\n- **burak-dev**: 1 PR (rate limiting)\n- **melis-h**: 1 PR (pagination fix)\n- **emreozcan**: 1 PR in review (custom review rules)",
+      summary: "## Daily Development Summary — " + formatDate(daysAgo(1)) + "\n\n### Highlights\n- **3 PRs merged** across octopus, backend-api, and mobile-app\n- Real-time WebSocket support landed in octopus (#52) — reviews now update live\n- Rate limiting implementation merged for backend-api (#234)\n- Mobile infinite scroll bug fixed (#90)\n\n### Review Activity\n- 4 code reviews completed\n- 2 high-severity issues identified (memory leak in WebSocket hooks, race condition in rate limiter)\n- 1 PR still in review: custom review rules feature (#53)\n\n### Contributors\n- **alice-dev**: 2 PRs (WebSocket integration, OAuth fix)\n- **eve-dev**: 1 PR (rate limiting)\n- **frank-dev**: 1 PR (pagination fix)\n- **dave-dev**: 1 PR in review (custom review rules)",
       prCount: 4,
       organizationId: orgId,
     },
     {
       id: cuid(),
       date: formatDate(daysAgo(2)),
-      summary: "## Daily Development Summary — " + formatDate(daysAgo(2)) + "\n\n### Highlights\n- **2 PRs merged**: dashboard redesign and diff parser fix\n- New analytics dashboard with Recharts landed in frontend-web (#178)\n- Binary file edge case fixed in octopus diff parser (#51)\n\n### Review Activity\n- 3 code reviews completed\n- 1 low-severity issue: chart re-rendering performance\n- All reviews completed within 30 seconds average\n\n### Contributors\n- **selin-k**: Dashboard redesign (178 — 23 files changed)\n- **alexdev**: Diff parser fix (51 — 4 files changed)",
+      summary: "## Daily Development Summary — " + formatDate(daysAgo(2)) + "\n\n### Highlights\n- **2 PRs merged**: dashboard redesign and diff parser fix\n- New analytics dashboard with Recharts landed in frontend-web (#178)\n- Binary file edge case fixed in octopus diff parser (#51)\n\n### Review Activity\n- 3 code reviews completed\n- 1 low-severity issue: chart re-rendering performance\n- All reviews completed within 30 seconds average\n\n### Contributors\n- **carol-dev**: Dashboard redesign (178 — 23 files changed)\n- **bob-dev**: Diff parser fix (51 — 4 files changed)",
       prCount: 2,
       organizationId: orgId,
     },
     {
       id: cuid(),
       date: formatDate(daysAgo(3)),
-      summary: "## Daily Development Summary — " + formatDate(daysAgo(3)) + "\n\n### Highlights\n- **2 PRs merged**: SSR hydration fix and push notifications\n- Hydration mismatch in theme provider resolved in frontend-web (#177)\n- Push notification support launched for mobile-app (#89)\n\n### Review Activity\n- 2 code reviews completed\n- 1 medium-severity issue: missing Android 13+ notification channel\n- 1 low-severity issue: notification grouping suggestion\n\n### Contributors\n- **melis-h**: Theme hydration fix (177)\n- **emreozcan**: Push notifications (89 — 12 files changed)",
+      summary: "## Daily Development Summary — " + formatDate(daysAgo(3)) + "\n\n### Highlights\n- **2 PRs merged**: SSR hydration fix and push notifications\n- Hydration mismatch in theme provider resolved in frontend-web (#177)\n- Push notification support launched for mobile-app (#89)\n\n### Review Activity\n- 2 code reviews completed\n- 1 medium-severity issue: missing Android 13+ notification channel\n- 1 low-severity issue: notification grouping suggestion\n\n### Contributors\n- **frank-dev**: Theme hydration fix (177)\n- **dave-dev**: Push notifications (89 — 12 files changed)",
       prCount: 2,
       organizationId: orgId,
     },
