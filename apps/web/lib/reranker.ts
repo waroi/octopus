@@ -33,7 +33,7 @@ export async function rerankDocuments<T extends DocumentWithText>(
   const client = getCohereClient();
   if (!client) {
     console.warn("[reranker] COHERE_API_KEY not set, skipping rerank");
-    return documents;
+    return documents.slice(0, options.topK ?? 10);
   }
 
   const topK = options.topK ?? 10;
@@ -79,7 +79,7 @@ export async function rerankDocuments<T extends DocumentWithText>(
 
     return finalResults.map((r) => documents[r.index]!);
   } catch (err) {
-    console.error("[reranker] Cohere API failed, returning original documents:", err);
-    return documents;
+    console.warn("[reranker] Cohere API failed, skipping rerank:", (err as Error).message);
+    return documents.slice(0, options.topK ?? 10);
   }
 }
