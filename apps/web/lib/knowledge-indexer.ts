@@ -4,6 +4,7 @@ import {
   ensureKnowledgeCollection,
   upsertKnowledgeChunks,
 } from "@/lib/qdrant";
+import { generateSparseVectors } from "@/lib/sparse-vector";
 
 const CHUNK_SIZE = 1500;
 const CHUNK_OVERLAP = 200;
@@ -63,10 +64,12 @@ export async function indexKnowledgeDocument(
 
   const texts = chunks.map((c) => c.text);
   const vectors = await createEmbeddings(texts);
+  const sparseVectors = generateSparseVectors(texts);
 
   const points = chunks.map((chunk, i) => ({
     id: crypto.randomUUID(),
     vector: vectors[i],
+    sparseVector: sparseVectors[i],
     payload: {
       orgId,
       documentId,

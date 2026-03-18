@@ -860,6 +860,7 @@ export async function feedbackIssue(
       if (fullIssue) {
         const { createEmbeddings } = await import("@/lib/embeddings");
         const { upsertFeedbackPattern, ensureFeedbackCollection } = await import("@/lib/qdrant");
+        const { generateSparseVector } = await import("@/lib/sparse-vector");
         await ensureFeedbackCollection();
         const text = `${fullIssue.title} ${fullIssue.description}`;
         const [vector] = await createEmbeddings([text], {
@@ -869,6 +870,7 @@ export async function feedbackIssue(
         await upsertFeedbackPattern({
           id: fullIssue.id,
           vector,
+          sparseVector: generateSparseVector(text),
           payload: {
             title: fullIssue.title,
             description: fullIssue.description,
@@ -972,6 +974,7 @@ export async function syncGithubReactions(
         try {
           const { createEmbeddings } = await import("@/lib/embeddings");
           const { upsertFeedbackPattern, ensureFeedbackCollection } = await import("@/lib/qdrant");
+          const { generateSparseVector } = await import("@/lib/sparse-vector");
           await ensureFeedbackCollection();
           const text = `${issue.title} ${issue.description}`;
           const [vector] = await createEmbeddings([text], {
@@ -981,6 +984,7 @@ export async function syncGithubReactions(
           await upsertFeedbackPattern({
             id: issue.id,
             vector,
+            sparseVector: generateSparseVector(text),
             payload: {
               title: issue.title,
               description: issue.description,

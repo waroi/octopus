@@ -1,7 +1,9 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
+import { generateSparseVector } from "@/lib/sparse-vector";
 
 const COLLECTION_NAME = "code_chunks";
 const VECTOR_SIZE = 3072; // text-embedding-3-large
+const SPARSE_VECTOR_NAME = "sparse";
 
 let client: QdrantClient | null = null;
 
@@ -24,11 +26,21 @@ export async function ensureCollection() {
   if (!exists) {
     await qdrant.createCollection(COLLECTION_NAME, {
       vectors: { size: VECTOR_SIZE, distance: "Cosine" },
+      sparse_vectors: { [SPARSE_VECTOR_NAME]: {} },
     });
     await qdrant.createPayloadIndex(COLLECTION_NAME, {
       field_name: "repoId",
       field_schema: "keyword",
     });
+  } else {
+    // Add sparse vector config to existing collection
+    try {
+      await qdrant.updateCollection(COLLECTION_NAME, {
+        sparse_vectors: { [SPARSE_VECTOR_NAME]: {} },
+      });
+    } catch (err) {
+      console.debug(`[qdrant] sparse vector config already exists or update failed:`, err);
+    }
   }
 }
 
@@ -37,14 +49,20 @@ export async function upsertChunks(
     id: string;
     vector: number[];
     payload: Record<string, unknown>;
+    sparseVector?: { indices: number[]; values: number[] };
   }[],
 ) {
   const qdrant = getQdrantClient();
   // Qdrant accepts max 100 points per request
   for (let i = 0; i < points.length; i += 100) {
-    await qdrant.upsert(COLLECTION_NAME, {
-      points: points.slice(i, i + 100),
-    });
+    const batch = points.slice(i, i + 100).map((p) => ({
+      id: p.id,
+      vector: p.sparseVector
+        ? { "": p.vector, [SPARSE_VECTOR_NAME]: p.sparseVector }
+        : p.vector,
+      payload: p.payload,
+    }));
+    await qdrant.upsert(COLLECTION_NAME, { points: batch });
   }
 }
 
@@ -80,18 +98,35 @@ export async function searchSimilarChunks(
   repoId: string,
   queryVector: number[],
   limit = 20,
+  queryText?: string,
 ): Promise<{ filePath: string; text: string; startLine: number; endLine: number; score: number }[]> {
   const qdrant = getQdrantClient();
-  const result = await qdrant.search(COLLECTION_NAME, {
-    vector: queryVector,
-    filter: {
-      must: [{ key: "repoId", match: { value: repoId } }],
-    },
-    limit,
-    with_payload: true,
-  });
+  const filter = { must: [{ key: "repoId", match: { value: repoId } }] };
 
-  return result.map((point) => ({
+  let points: { payload?: Record<string, unknown> | null; score: number }[];
+
+  if (queryText) {
+    const sparseQuery = generateSparseVector(queryText);
+    const result = await qdrant.query(COLLECTION_NAME, {
+      prefetch: [
+        { query: queryVector, limit: limit * 2, filter },
+        { query: { indices: sparseQuery.indices, values: sparseQuery.values }, using: SPARSE_VECTOR_NAME, limit: limit * 2, filter },
+      ],
+      query: { fusion: "rrf" },
+      limit,
+      with_payload: true,
+    });
+    points = result.points;
+  } else {
+    points = await qdrant.search(COLLECTION_NAME, {
+      vector: queryVector,
+      filter,
+      limit,
+      with_payload: true,
+    });
+  }
+
+  return points.map((point) => ({
     filePath: (point.payload?.filePath as string) ?? "",
     text: (point.payload?.text as string) ?? "",
     startLine: (point.payload?.startLine as number) ?? 0,
@@ -104,22 +139,41 @@ export async function searchCodeChunksAcrossRepos(
   repoIds: string[],
   queryVector: number[],
   limit = 20,
+  queryText?: string,
 ): Promise<{ filePath: string; text: string; startLine: number; endLine: number; repoId: string; score: number }[]> {
   if (repoIds.length === 0) return [];
   const qdrant = getQdrantClient();
-  const result = await qdrant.search(COLLECTION_NAME, {
-    vector: queryVector,
-    filter: {
-      should: repoIds.map((id) => ({
-        key: "repoId",
-        match: { value: id },
-      })),
-    },
-    limit,
-    with_payload: true,
-  });
+  const filter = {
+    should: repoIds.map((id) => ({
+      key: "repoId",
+      match: { value: id },
+    })),
+  };
 
-  return result.map((point) => ({
+  let points: { payload?: Record<string, unknown> | null; score: number }[];
+
+  if (queryText) {
+    const sparseQuery = generateSparseVector(queryText);
+    const result = await qdrant.query(COLLECTION_NAME, {
+      prefetch: [
+        { query: queryVector, limit: limit * 2, filter },
+        { query: { indices: sparseQuery.indices, values: sparseQuery.values }, using: SPARSE_VECTOR_NAME, limit: limit * 2, filter },
+      ],
+      query: { fusion: "rrf" },
+      limit,
+      with_payload: true,
+    });
+    points = result.points;
+  } else {
+    points = await qdrant.search(COLLECTION_NAME, {
+      vector: queryVector,
+      filter,
+      limit,
+      with_payload: true,
+    });
+  }
+
+  return points.map((point) => ({
     filePath: (point.payload?.filePath as string) ?? "",
     text: (point.payload?.text as string) ?? "",
     startLine: (point.payload?.startLine as number) ?? 0,
@@ -145,6 +199,7 @@ export async function ensureKnowledgeCollection() {
   if (!exists) {
     await qdrant.createCollection(KNOWLEDGE_COLLECTION_NAME, {
       vectors: { size: VECTOR_SIZE, distance: "Cosine" },
+      sparse_vectors: { [SPARSE_VECTOR_NAME]: {} },
     });
     await qdrant.createPayloadIndex(KNOWLEDGE_COLLECTION_NAME, {
       field_name: "orgId",
@@ -154,6 +209,14 @@ export async function ensureKnowledgeCollection() {
       field_name: "documentId",
       field_schema: "keyword",
     });
+  } else {
+    try {
+      await qdrant.updateCollection(KNOWLEDGE_COLLECTION_NAME, {
+        sparse_vectors: { [SPARSE_VECTOR_NAME]: {} },
+      });
+    } catch (err) {
+      console.debug(`[qdrant] sparse vector config already exists or update failed:`, err);
+    }
   }
 }
 
@@ -162,13 +225,19 @@ export async function upsertKnowledgeChunks(
     id: string;
     vector: number[];
     payload: Record<string, unknown>;
+    sparseVector?: { indices: number[]; values: number[] };
   }[],
 ) {
   const qdrant = getQdrantClient();
   for (let i = 0; i < points.length; i += 100) {
-    await qdrant.upsert(KNOWLEDGE_COLLECTION_NAME, {
-      points: points.slice(i, i + 100),
-    });
+    const batch = points.slice(i, i + 100).map((p) => ({
+      id: p.id,
+      vector: p.sparseVector
+        ? { "": p.vector, [SPARSE_VECTOR_NAME]: p.sparseVector }
+        : p.vector,
+      payload: p.payload,
+    }));
+    await qdrant.upsert(KNOWLEDGE_COLLECTION_NAME, { points: batch });
   }
 }
 
@@ -185,18 +254,35 @@ export async function searchKnowledgeChunks(
   orgId: string,
   queryVector: number[],
   limit = 10,
+  queryText?: string,
 ): Promise<{ title: string; text: string; score: number }[]> {
   const qdrant = getQdrantClient();
-  const result = await qdrant.search(KNOWLEDGE_COLLECTION_NAME, {
-    vector: queryVector,
-    filter: {
-      must: [{ key: "orgId", match: { value: orgId } }],
-    },
-    limit,
-    with_payload: true,
-  });
+  const filter = { must: [{ key: "orgId", match: { value: orgId } }] };
 
-  return result.map((point) => ({
+  let points: { payload?: Record<string, unknown> | null; score: number }[];
+
+  if (queryText) {
+    const sparseQuery = generateSparseVector(queryText);
+    const result = await qdrant.query(KNOWLEDGE_COLLECTION_NAME, {
+      prefetch: [
+        { query: queryVector, limit: limit * 2, filter },
+        { query: { indices: sparseQuery.indices, values: sparseQuery.values }, using: SPARSE_VECTOR_NAME, limit: limit * 2, filter },
+      ],
+      query: { fusion: "rrf" },
+      limit,
+      with_payload: true,
+    });
+    points = result.points;
+  } else {
+    points = await qdrant.search(KNOWLEDGE_COLLECTION_NAME, {
+      vector: queryVector,
+      filter,
+      limit,
+      with_payload: true,
+    });
+  }
+
+  return points.map((point) => ({
     title: (point.payload?.title as string) ?? "",
     text: (point.payload?.text as string) ?? "",
     score: point.score,
@@ -243,6 +329,7 @@ export async function ensureReviewCollection() {
   if (!exists) {
     await qdrant.createCollection(REVIEW_COLLECTION_NAME, {
       vectors: { size: VECTOR_SIZE, distance: "Cosine" },
+      sparse_vectors: { [SPARSE_VECTOR_NAME]: {} },
     });
     await qdrant.createPayloadIndex(REVIEW_COLLECTION_NAME, {
       field_name: "orgId",
@@ -256,6 +343,14 @@ export async function ensureReviewCollection() {
       field_name: "pullRequestId",
       field_schema: "keyword",
     });
+  } else {
+    try {
+      await qdrant.updateCollection(REVIEW_COLLECTION_NAME, {
+        sparse_vectors: { [SPARSE_VECTOR_NAME]: {} },
+      });
+    } catch (err) {
+      console.debug(`[qdrant] sparse vector config already exists or update failed:`, err);
+    }
   }
 }
 
@@ -264,13 +359,19 @@ export async function upsertReviewChunks(
     id: string;
     vector: number[];
     payload: Record<string, unknown>;
+    sparseVector?: { indices: number[]; values: number[] };
   }[],
 ) {
   const qdrant = getQdrantClient();
   for (let i = 0; i < points.length; i += 100) {
-    await qdrant.upsert(REVIEW_COLLECTION_NAME, {
-      points: points.slice(i, i + 100),
-    });
+    const batch = points.slice(i, i + 100).map((p) => ({
+      id: p.id,
+      vector: p.sparseVector
+        ? { "": p.vector, [SPARSE_VECTOR_NAME]: p.sparseVector }
+        : p.vector,
+      payload: p.payload,
+    }));
+    await qdrant.upsert(REVIEW_COLLECTION_NAME, { points: batch });
   }
 }
 
@@ -287,18 +388,35 @@ export async function searchReviewChunks(
   orgId: string,
   queryVector: number[],
   limit = 10,
+  queryText?: string,
 ): Promise<{ text: string; prTitle: string; prNumber: number; repoFullName: string; author: string; reviewDate: string; score: number }[]> {
   const qdrant = getQdrantClient();
-  const result = await qdrant.search(REVIEW_COLLECTION_NAME, {
-    vector: queryVector,
-    filter: {
-      must: [{ key: "orgId", match: { value: orgId } }],
-    },
-    limit,
-    with_payload: true,
-  });
+  const filter = { must: [{ key: "orgId", match: { value: orgId } }] };
 
-  return result.map((point) => ({
+  let points: { payload?: Record<string, unknown> | null; score: number }[];
+
+  if (queryText) {
+    const sparseQuery = generateSparseVector(queryText);
+    const result = await qdrant.query(REVIEW_COLLECTION_NAME, {
+      prefetch: [
+        { query: queryVector, limit: limit * 2, filter },
+        { query: { indices: sparseQuery.indices, values: sparseQuery.values }, using: SPARSE_VECTOR_NAME, limit: limit * 2, filter },
+      ],
+      query: { fusion: "rrf" },
+      limit,
+      with_payload: true,
+    });
+    points = result.points;
+  } else {
+    points = await qdrant.search(REVIEW_COLLECTION_NAME, {
+      vector: queryVector,
+      filter,
+      limit,
+      with_payload: true,
+    });
+  }
+
+  return points.map((point) => ({
     text: (point.payload?.text as string) ?? "",
     prTitle: (point.payload?.prTitle as string) ?? "",
     prNumber: (point.payload?.prNumber as number) ?? 0,
@@ -325,6 +443,7 @@ export async function ensureChatCollection() {
   if (!exists) {
     await qdrant.createCollection(CHAT_COLLECTION_NAME, {
       vectors: { size: VECTOR_SIZE, distance: "Cosine" },
+      sparse_vectors: { [SPARSE_VECTOR_NAME]: {} },
     });
     await qdrant.createPayloadIndex(CHAT_COLLECTION_NAME, {
       field_name: "orgId",
@@ -338,6 +457,14 @@ export async function ensureChatCollection() {
       field_name: "userId",
       field_schema: "keyword",
     });
+  } else {
+    try {
+      await qdrant.updateCollection(CHAT_COLLECTION_NAME, {
+        sparse_vectors: { [SPARSE_VECTOR_NAME]: {} },
+      });
+    } catch (err) {
+      console.debug(`[qdrant] sparse vector config already exists or update failed:`, err);
+    }
   }
 }
 
@@ -345,9 +472,17 @@ export async function upsertChatChunk(point: {
   id: string;
   vector: number[];
   payload: Record<string, unknown>;
+  sparseVector?: { indices: number[]; values: number[] };
 }) {
   const qdrant = getQdrantClient();
-  await qdrant.upsert(CHAT_COLLECTION_NAME, { points: [point] });
+  const qdrantPoint = {
+    id: point.id,
+    vector: point.sparseVector
+      ? { "": point.vector, [SPARSE_VECTOR_NAME]: point.sparseVector }
+      : point.vector,
+    payload: point.payload,
+  };
+  await qdrant.upsert(CHAT_COLLECTION_NAME, { points: [qdrantPoint] });
 }
 
 export async function searchChatChunks(
@@ -355,6 +490,7 @@ export async function searchChatChunks(
   queryVector: number[],
   limit = 5,
   excludeConversationId?: string,
+  queryText?: string,
 ): Promise<{ question: string; answer: string; conversationId: string; conversationTitle: string; score: number }[]> {
   const qdrant = getQdrantClient();
   try {
@@ -366,14 +502,31 @@ export async function searchChatChunks(
         { key: "conversationId", match: { value: excludeConversationId } },
       ];
     }
-    const result = await qdrant.search(CHAT_COLLECTION_NAME, {
-      vector: queryVector,
-      filter,
-      limit,
-      with_payload: true,
-    });
 
-    return result.map((point) => ({
+    let points: { payload?: Record<string, unknown> | null; score: number }[];
+
+    if (queryText) {
+      const sparseQuery = generateSparseVector(queryText);
+      const result = await qdrant.query(CHAT_COLLECTION_NAME, {
+        prefetch: [
+          { query: queryVector, limit: limit * 2, filter },
+          { query: { indices: sparseQuery.indices, values: sparseQuery.values }, using: SPARSE_VECTOR_NAME, limit: limit * 2, filter },
+        ],
+        query: { fusion: "rrf" },
+        limit,
+        with_payload: true,
+      });
+      points = result.points;
+    } else {
+      points = await qdrant.search(CHAT_COLLECTION_NAME, {
+        vector: queryVector,
+        filter,
+        limit,
+        with_payload: true,
+      });
+    }
+
+    return points.map((point) => ({
       question: (point.payload?.question as string) ?? "",
       answer: (point.payload?.answer as string) ?? "",
       conversationId: (point.payload?.conversationId as string) ?? "",
@@ -410,6 +563,7 @@ export async function ensureDiagramCollection() {
   if (!exists) {
     await qdrant.createCollection(DIAGRAM_COLLECTION_NAME, {
       vectors: { size: VECTOR_SIZE, distance: "Cosine" },
+      sparse_vectors: { [SPARSE_VECTOR_NAME]: {} },
     });
     await qdrant.createPayloadIndex(DIAGRAM_COLLECTION_NAME, {
       field_name: "orgId",
@@ -423,6 +577,14 @@ export async function ensureDiagramCollection() {
       field_name: "pullRequestId",
       field_schema: "keyword",
     });
+  } else {
+    try {
+      await qdrant.updateCollection(DIAGRAM_COLLECTION_NAME, {
+        sparse_vectors: { [SPARSE_VECTOR_NAME]: {} },
+      });
+    } catch (err) {
+      console.debug(`[qdrant] sparse vector config already exists or update failed:`, err);
+    }
   }
 
   // Add diagramType index (safe for existing collections)
@@ -440,9 +602,17 @@ export async function upsertDiagramChunk(point: {
   id: string;
   vector: number[];
   payload: Record<string, unknown>;
+  sparseVector?: { indices: number[]; values: number[] };
 }) {
   const qdrant = getQdrantClient();
-  await qdrant.upsert(DIAGRAM_COLLECTION_NAME, { points: [point] });
+  const qdrantPoint = {
+    id: point.id,
+    vector: point.sparseVector
+      ? { "": point.vector, [SPARSE_VECTOR_NAME]: point.sparseVector }
+      : point.vector,
+    payload: point.payload,
+  };
+  await qdrant.upsert(DIAGRAM_COLLECTION_NAME, { points: [qdrantPoint] });
 }
 
 export async function deleteDiagramChunksByPR(pullRequestId: string) {
@@ -458,19 +628,36 @@ export async function searchDiagramChunks(
   orgId: string,
   queryVector: number[],
   limit = 3,
+  queryText?: string,
 ): Promise<{ mermaidCode: string; diagramType: string; prTitle: string; prNumber: number; repoFullName: string; author: string; reviewDate: string; score: number }[]> {
   const qdrant = getQdrantClient();
   try {
-    const result = await qdrant.search(DIAGRAM_COLLECTION_NAME, {
-      vector: queryVector,
-      filter: {
-        must: [{ key: "orgId", match: { value: orgId } }],
-      },
-      limit,
-      with_payload: true,
-    });
+    const filter = { must: [{ key: "orgId", match: { value: orgId } }] };
 
-    return result.map((point) => ({
+    let points: { payload?: Record<string, unknown> | null; score: number }[];
+
+    if (queryText) {
+      const sparseQuery = generateSparseVector(queryText);
+      const result = await qdrant.query(DIAGRAM_COLLECTION_NAME, {
+        prefetch: [
+          { query: queryVector, limit: limit * 2, filter },
+          { query: { indices: sparseQuery.indices, values: sparseQuery.values }, using: SPARSE_VECTOR_NAME, limit: limit * 2, filter },
+        ],
+        query: { fusion: "rrf" },
+        limit,
+        with_payload: true,
+      });
+      points = result.points;
+    } else {
+      points = await qdrant.search(DIAGRAM_COLLECTION_NAME, {
+        vector: queryVector,
+        filter,
+        limit,
+        with_payload: true,
+      });
+    }
+
+    return points.map((point) => ({
       mermaidCode: (point.payload?.mermaidCode as string) ?? "",
       diagramType: (point.payload?.diagramType as string) ?? "flowchart",
       prTitle: (point.payload?.prTitle as string) ?? "",
@@ -501,6 +688,7 @@ export async function ensureFeedbackCollection() {
   if (!exists) {
     await qdrant.createCollection(FEEDBACK_COLLECTION_NAME, {
       vectors: { size: VECTOR_SIZE, distance: "Cosine" },
+      sparse_vectors: { [SPARSE_VECTOR_NAME]: {} },
     });
     await qdrant.createPayloadIndex(FEEDBACK_COLLECTION_NAME, {
       field_name: "repoId",
@@ -514,6 +702,14 @@ export async function ensureFeedbackCollection() {
       field_name: "feedback",
       field_schema: "keyword",
     });
+  } else {
+    try {
+      await qdrant.updateCollection(FEEDBACK_COLLECTION_NAME, {
+        sparse_vectors: { [SPARSE_VECTOR_NAME]: {} },
+      });
+    } catch (err) {
+      console.debug(`[qdrant] sparse vector config already exists or update failed:`, err);
+    }
   }
 }
 
@@ -521,9 +717,17 @@ export async function upsertFeedbackPattern(point: {
   id: string;
   vector: number[];
   payload: Record<string, unknown>;
+  sparseVector?: { indices: number[]; values: number[] };
 }) {
   const qdrant = getQdrantClient();
-  await qdrant.upsert(FEEDBACK_COLLECTION_NAME, { points: [point] });
+  const qdrantPoint = {
+    id: point.id,
+    vector: point.sparseVector
+      ? { "": point.vector, [SPARSE_VECTOR_NAME]: point.sparseVector }
+      : point.vector,
+    payload: point.payload,
+  };
+  await qdrant.upsert(FEEDBACK_COLLECTION_NAME, { points: [qdrantPoint] });
 }
 
 export async function searchFeedbackPatterns(
@@ -531,6 +735,7 @@ export async function searchFeedbackPatterns(
   queryVector: number[],
   limit = 5,
   orgId?: string,
+  queryText?: string,
 ): Promise<{ title: string; description: string; feedback: string; repoId: string; score: number }[]> {
   const qdrant = getQdrantClient();
   try {
@@ -546,14 +751,30 @@ export async function searchFeedbackPatterns(
           must: [{ key: "repoId", match: { value: repoId } }],
         };
 
-    const result = await qdrant.search(FEEDBACK_COLLECTION_NAME, {
-      vector: queryVector,
-      filter,
-      limit,
-      with_payload: true,
-    });
+    let points: { payload?: Record<string, unknown> | null; score: number }[];
 
-    return result.map((point) => ({
+    if (queryText) {
+      const sparseQuery = generateSparseVector(queryText);
+      const result = await qdrant.query(FEEDBACK_COLLECTION_NAME, {
+        prefetch: [
+          { query: queryVector, limit: limit * 2, filter },
+          { query: { indices: sparseQuery.indices, values: sparseQuery.values }, using: SPARSE_VECTOR_NAME, limit: limit * 2, filter },
+        ],
+        query: { fusion: "rrf" },
+        limit,
+        with_payload: true,
+      });
+      points = result.points;
+    } else {
+      points = await qdrant.search(FEEDBACK_COLLECTION_NAME, {
+        vector: queryVector,
+        filter,
+        limit,
+        with_payload: true,
+      });
+    }
+
+    return points.map((point) => ({
       title: (point.payload?.title as string) ?? "",
       description: (point.payload?.description as string) ?? "",
       feedback: (point.payload?.feedback as string) ?? "",

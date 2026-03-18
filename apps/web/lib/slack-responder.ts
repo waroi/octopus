@@ -11,6 +11,7 @@ import {
   upsertChatChunk,
 } from "@/lib/qdrant";
 import { logAiUsage } from "@/lib/ai-usage";
+import { generateSparseVector } from "@/lib/sparse-vector";
 
 let anthropicClient: Anthropic | null = null;
 
@@ -98,12 +99,12 @@ export async function processSlackQuestion({
     // 3. Search all 5 Qdrant collections in parallel (reduced limits for Slack)
     const [codeChunks, knowledgeChunks, reviewChunks, chatChunks, diagramChunks] = await Promise.all([
       repoIds.length > 0
-        ? searchCodeChunksAcrossRepos(repoIds, queryVector, 10)
+        ? searchCodeChunksAcrossRepos(repoIds, queryVector, 10, question)
         : Promise.resolve([]),
-      searchKnowledgeChunks(orgId, queryVector, 5),
-      searchReviewChunks(orgId, queryVector, 3),
-      searchChatChunks(orgId, queryVector, 3),
-      searchDiagramChunks(orgId, queryVector, 2),
+      searchKnowledgeChunks(orgId, queryVector, 5, question),
+      searchReviewChunks(orgId, queryVector, 3, question),
+      searchChatChunks(orgId, queryVector, 3, undefined, question),
+      searchDiagramChunks(orgId, queryVector, 2, question),
     ]);
 
     // 4. Build context strings (same format as chat route)
@@ -319,6 +320,7 @@ ${chatHistoryContext || "No relevant previous conversations found."}
       await upsertChatChunk({
         id: crypto.randomUUID(),
         vector: qaVector,
+        sparseVector: generateSparseVector(qaPairText),
         payload: {
           orgId,
           userId: slackUserId,

@@ -3,6 +3,7 @@ import { getInstallationToken, getFileContent as ghGetFileContent } from "@/lib/
 import * as bitbucketLib from "@/lib/bitbucket";
 import { createEmbeddings } from "@/lib/embeddings";
 import { ensureCollection, upsertChunks, deleteRepoChunks } from "@/lib/qdrant";
+import { generateSparseVectors } from "@/lib/sparse-vector";
 import { parseOctopusIgnore, type Ignore } from "@/lib/octopus-ignore";
 
 const GITHUB_API = "https://api.github.com";
@@ -428,9 +429,12 @@ export async function indexRepository(
   if (signal?.aborted) throw new Error("Indexing cancelled");
 
   // 6. Upsert to Qdrant
+  const sparseVectors = generateSparseVectors(texts);
+
   const points = allChunks.map((chunk, i) => ({
     id: crypto.randomUUID(),
     vector: vectors[i],
+    sparseVector: sparseVectors[i],
     payload: {
       repoId,
       fullName,

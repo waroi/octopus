@@ -101,10 +101,10 @@ export async function POST(request: Request) {
   // Search relevant chunks
   const [rawCodeChunks, rawKnowledgeChunks, rawReviewChunks] = await Promise.all([
     repoIds.length > 0
-      ? searchCodeChunksAcrossRepos(repoIds, queryVector, 20)
+      ? searchCodeChunksAcrossRepos(repoIds, queryVector, 20, embeddingInput)
       : Promise.resolve([]),
-    searchKnowledgeChunks(orgId, queryVector, 10),
-    searchReviewChunks(orgId, queryVector, 6),
+    searchKnowledgeChunks(orgId, queryVector, 10, embeddingInput),
+    searchReviewChunks(orgId, queryVector, 6, embeddingInput),
   ]);
 
   // Combine and rerank

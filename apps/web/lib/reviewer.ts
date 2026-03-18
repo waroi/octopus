@@ -15,6 +15,7 @@ import {
 } from "@/lib/qdrant";
 import { extractAllMermaidBlocks, extractNodeLabels, DIAGRAM_TYPE_LABELS } from "@/lib/mermaid-utils";
 import { createEmbeddings } from "@/lib/embeddings";
+import { generateSparseVector } from "@/lib/sparse-vector";
 import { rerankDocuments } from "@/lib/reranker";
 import {
   getPullRequestDiff as ghGetPullRequestDiff,
@@ -945,8 +946,8 @@ export async function processReview(pullRequestId: string): Promise<void> {
     const rerankQuery = `${pr.title}\n${diff.slice(0, 2000)}`;
 
     const [rawCodeChunks, rawKnowledgeChunks] = await Promise.all([
-      searchSimilarChunks(repo.id, queryVector, 50),
-      searchKnowledgeChunks(org.id, queryVector, 25).catch(() => [] as { title: string; text: string; score: number }[]),
+      searchSimilarChunks(repo.id, queryVector, 50, rerankQuery),
+      searchKnowledgeChunks(org.id, queryVector, 25, rerankQuery).catch(() => [] as { title: string; text: string; score: number }[]),
     ]);
 
     const [contextChunks, knowledgeChunks] = await Promise.all([
@@ -1320,7 +1321,7 @@ Rules:
 
         const suppressedIndexes = new Set<number>();
         for (let i = 0; i < findings.length; i++) {
-          const matches = await searchFeedbackPatterns(repo.id, findingVectors[i], 3, org.id);
+          const matches = await searchFeedbackPatterns(repo.id, findingVectors[i], 3, org.id, findingTexts[i]);
           const falsePositiveMatch = matches.find(
             (m) => m.feedback === "down" && m.score > 0.85,
           );
@@ -1584,6 +1585,7 @@ Rules:
         {
           id: crypto.randomUUID(),
           vector: reviewVector,
+          sparseVector: generateSparseVector(effectiveReviewBody),
           payload: {
             orgId: org.id,
             repoId: repo.id,
@@ -1627,6 +1629,7 @@ Rules:
           await upsertDiagramChunk({
             id: crypto.randomUUID(),
             vector: vectors[i],
+            sparseVector: generateSparseVector(descriptions[i]),
             payload: {
               orgId: org.id,
               repoId: repo.id,

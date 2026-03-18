@@ -16,6 +16,7 @@ import { logAiUsage } from "@/lib/ai-usage";
 import { rerankDocuments } from "@/lib/reranker";
 import { pubby } from "@/lib/pubby";
 import { processNextInQueue } from "@/lib/chat-queue-processor";
+import { generateSparseVector } from "@/lib/sparse-vector";
 
 let anthropicClient: Anthropic | null = null;
 
@@ -221,12 +222,12 @@ export async function POST(request: Request) {
   // Over-fetch from all 5 Qdrant collections in parallel (2x for reranking)
   const [rawCodeChunks, rawKnowledgeChunks, rawReviewChunks, rawChatChunks, rawDiagramChunks] = await Promise.all([
     repoIds.length > 0
-      ? searchCodeChunksAcrossRepos(repoIds, queryVector, 30)
+      ? searchCodeChunksAcrossRepos(repoIds, queryVector, 30, embeddingInput)
       : Promise.resolve([]),
-    searchKnowledgeChunks(orgId, queryVector, 16),
-    searchReviewChunks(orgId, queryVector, 10),
-    searchChatChunks(orgId, queryVector, 10, conversation.id),
-    searchDiagramChunks(orgId, queryVector, 6),
+    searchKnowledgeChunks(orgId, queryVector, 16, embeddingInput),
+    searchReviewChunks(orgId, queryVector, 10, embeddingInput),
+    searchChatChunks(orgId, queryVector, 10, conversation.id, embeddingInput),
+    searchDiagramChunks(orgId, queryVector, 6, embeddingInput),
   ]);
 
   // Combine all chunks with _source tag for unified reranking
@@ -517,6 +518,7 @@ ${chatHistoryContext || "No relevant previous conversations found."}
             await upsertChatChunk({
               id: crypto.randomUUID(),
               vector: qaVector,
+              sparseVector: generateSparseVector(qaPairText),
               payload: {
                 orgId,
                 userId: session.user.id,
