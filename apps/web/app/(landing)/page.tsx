@@ -6,6 +6,7 @@ import { FloatingOctopus } from "@/components/landing-unicorn-section";
 import { LandingFeatures } from "@/components/landing-features";
 import { TrackedLink, TrackedAnchor } from "@/components/tracked-link";
 import { LandingFooter } from "@/components/landing-footer";
+import { LaunchCountdown } from "@/components/landing-countdown";
 import {
   IconBrandGithub,
   IconArrowRight,
@@ -200,6 +201,14 @@ export default async function LandingPage() {
                 100% open source under the MIT license. Inspect the code,
                 self-host on your own infrastructure, or contribute.
               </p>
+
+              {/* Open Source Launch Countdown */}
+              <div className="mt-10 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-6 py-8">
+                <p className="mb-5 text-sm font-medium text-[#888]">
+                  Core codebase goes public on <span className="text-white">March 23, 2026 — 15:00 UTC</span>
+                </p>
+                <LaunchCountdown />
+              </div>
             </div>
 
             <div className="mt-12 grid gap-3 sm:grid-cols-3">
