@@ -484,6 +484,54 @@ export async function listReviewComments(
   }));
 }
 
+export type PRReviewComment = {
+  id: number;
+  path: string;
+  line: number | null;
+  body: string;
+  inReplyToId: number | null;
+};
+
+export async function listPullRequestReviewComments(
+  installationId: number,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<PRReviewComment[]> {
+  const token = await getInstallationToken(installationId);
+  const res = await fetchWithRetry(
+    `${GITHUB_API}/repos/${owner}/${repo}/pulls/${prNumber}/comments?per_page=100`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+      },
+    },
+  );
+
+  if (!res.ok) {
+    console.error(`[github] Failed to list PR review comments: ${res.status}`);
+    return [];
+  }
+
+  const comments = (await res.json()) as {
+    id: number;
+    path: string;
+    line: number | null;
+    original_line: number | null;
+    body: string;
+    in_reply_to_id?: number;
+  }[];
+
+  return comments.map((c) => ({
+    id: c.id,
+    path: c.path,
+    line: c.line ?? c.original_line,
+    body: c.body,
+    inReplyToId: c.in_reply_to_id ?? null,
+  }));
+}
+
 export async function getCommentReactions(
   installationId: number,
   owner: string,

@@ -12,6 +12,7 @@ import {
   deleteDiagramChunksByPR,
   searchFeedbackPatterns,
   ensureFeedbackCollection,
+  upsertFeedbackPattern,
 } from "@/lib/qdrant";
 import { extractAllMermaidBlocks, extractNodeLabels, DIAGRAM_TYPE_LABELS } from "@/lib/mermaid-utils";
 import { createEmbeddings } from "@/lib/embeddings";
@@ -27,6 +28,8 @@ import {
   getRepositoryTree as ghGetRepositoryTree,
   getFileContent as ghGetFileContent,
   listReviewComments as ghListReviewComments,
+  listPullRequestReviewComments as ghListPullRequestReviewComments,
+  getCommentReactions as ghGetCommentReactions,
 } from "@/lib/github";
 import * as bitbucket from "@/lib/bitbucket";
 import { parseOctopusIgnore, filterDiff, detectBadCommits } from "@/lib/octopus-ignore";
@@ -531,6 +534,184 @@ async function emitReviewStatus(orgId: string, event: ReviewEvent) {
     );
 }
 
+// --- Pre-review feedback sync helpers ---
+
+const DISMISSAL_PATTERNS = [
+  /\bfalse\s*positive\b/i,
+  /\bnot\s*(a\s*)?bug\b/i,
+  /\bintentional(ly)?\b/i,
+  /\bnot\s*applicable\b/i,
+  /\bn\/?a\b/i,
+  /\bby\s*design\b/i,
+  /\bwon'?t\s*fix\b/i,
+  /\bignore\s*this\b/i,
+  /\bnot\s*(an?\s*)?issue\b/i,
+  /\bworking\s*as\s*(intended|expected|designed)\b/i,
+];
+
+function isDismissalReply(body: string): boolean {
+  return DISMISSAL_PATTERNS.some((p) => p.test(body));
+}
+
+async function embedFeedbackPattern(
+  issue: { id: string; title: string; description: string; severity: string; pullRequest: { repositoryId: string; repository: { organizationId: string } } },
+  feedback: "up" | "down",
+) {
+  await ensureFeedbackCollection();
+  const text = `${issue.title} ${issue.description}`;
+  const [vector] = await createEmbeddings([text], {
+    organizationId: issue.pullRequest.repository.organizationId,
+    operation: "embedding",
+  });
+  await upsertFeedbackPattern({
+    id: issue.id,
+    vector,
+    sparseVector: generateSparseVector(text),
+    payload: {
+      title: issue.title,
+      description: issue.description,
+      severity: issue.severity,
+      feedback,
+      repoId: issue.pullRequest.repositoryId,
+      orgId: issue.pullRequest.repository.organizationId,
+    },
+  });
+}
+
+/**
+ * Sync GitHub reactions (👍/👎) on previous review comments before re-review.
+ * Scoped to a single PR for speed.
+ */
+async function syncReactionsForPR(
+  installationId: number,
+  owner: string,
+  repoName: string,
+  pullRequestId: string,
+) {
+  const issues = await prisma.reviewIssue.findMany({
+    where: {
+      pullRequestId,
+      githubCommentId: { not: null },
+      feedback: null,
+    },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      severity: true,
+      githubCommentId: true,
+      pullRequest: {
+        select: {
+          repositoryId: true,
+          repository: { select: { organizationId: true } },
+        },
+      },
+    },
+  });
+
+  if (issues.length === 0) return;
+
+  let synced = 0;
+  for (const issue of issues) {
+    const commentId = Number(issue.githubCommentId);
+    if (isNaN(commentId)) continue;
+
+    try {
+      const reactions = await ghGetCommentReactions(installationId, owner, repoName, commentId);
+      if (reactions.thumbsUp > 0 || reactions.thumbsDown > 0) {
+        const vote = reactions.thumbsUp >= reactions.thumbsDown ? "up" : "down";
+        await prisma.reviewIssue.update({
+          where: { id: issue.id },
+          data: { feedback: vote, feedbackAt: new Date(), feedbackBy: "github-reaction" },
+        });
+        await embedFeedbackPattern(issue, vote);
+        synced++;
+      }
+    } catch (err) {
+      console.error(`[reviewer] Failed to sync reaction for issue ${issue.id}:`, err);
+    }
+  }
+
+  if (synced > 0) {
+    console.log(`[reviewer] Synced ${synced} GitHub reactions for PR ${pullRequestId}`);
+  }
+}
+
+/**
+ * Scan reply comments on previous review inline comments for dismissal keywords.
+ * If a reply says "false positive", "intentional", etc., mark the finding as feedback: "down".
+ */
+async function syncTextDismissalsForPR(
+  installationId: number,
+  owner: string,
+  repoName: string,
+  prNumber: number,
+  pullRequestId: string,
+) {
+  const issues = await prisma.reviewIssue.findMany({
+    where: {
+      pullRequestId,
+      githubCommentId: { not: null },
+      feedback: null,
+    },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      severity: true,
+      githubCommentId: true,
+      pullRequest: {
+        select: {
+          repositoryId: true,
+          repository: { select: { organizationId: true } },
+        },
+      },
+    },
+  });
+
+  if (issues.length === 0) return;
+
+  // Fetch all review comments on this PR (includes replies)
+  const allComments = await ghListPullRequestReviewComments(installationId, owner, repoName, prNumber);
+
+  // Build map: parent comment ID → reply bodies
+  const repliesByParent = new Map<number, string[]>();
+  for (const comment of allComments) {
+    if (comment.inReplyToId) {
+      const replies = repliesByParent.get(comment.inReplyToId) ?? [];
+      replies.push(comment.body);
+      repliesByParent.set(comment.inReplyToId, replies);
+    }
+  }
+
+  let synced = 0;
+  for (const issue of issues) {
+    const commentId = Number(issue.githubCommentId);
+    if (isNaN(commentId)) continue;
+
+    const replies = repliesByParent.get(commentId);
+    if (!replies) continue;
+
+    const hasDismissal = replies.some(isDismissalReply);
+    if (!hasDismissal) continue;
+
+    try {
+      await prisma.reviewIssue.update({
+        where: { id: issue.id },
+        data: { feedback: "down", feedbackAt: new Date(), feedbackBy: "github-reply-dismissal" },
+      });
+      await embedFeedbackPattern(issue, "down");
+      synced++;
+    } catch (err) {
+      console.error(`[reviewer] Failed to record text dismissal for issue ${issue.id}:`, err);
+    }
+  }
+
+  if (synced > 0) {
+    console.log(`[reviewer] Synced ${synced} text dismissals for PR ${pullRequestId}`);
+  }
+}
+
 export async function processReview(pullRequestId: string): Promise<void> {
   // Load PR with repo and org info
   const pr = await prisma.pullRequest.findUnique({
@@ -653,6 +834,16 @@ export async function processReview(pullRequestId: string): Promise<void> {
         }).catch((e) => console.error("[reviewer] Failed to set permission flag:", e));
         console.warn(`[reviewer] Permission grant needed for org: ${org.id}`);
       }
+    }
+  }
+
+  // Pre-review: sync feedback from GitHub before generating new findings
+  if (isGitHub && installationId) {
+    try {
+      await syncReactionsForPR(installationId, owner, repoName, pr.id);
+      await syncTextDismissalsForPR(installationId, owner, repoName, pr.number, pr.id);
+    } catch (err) {
+      console.warn("[reviewer] Pre-review feedback sync failed, continuing:", err);
     }
   }
 
