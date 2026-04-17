@@ -54,6 +54,7 @@ HEARTBEAT.md
 *.backup.*
 
 # claude code commands
+.claude/
 .claude/commands/
 .claude/settings.local.json
 
