@@ -210,6 +210,133 @@ describe("sanitizeMermaidCode", () => {
     const result = sanitizeMermaidCode(code);
     expect(result).toContain("(yes)");
   });
+
+  it("renames sequence participants that collide with reserved keywords", () => {
+    const code = [
+      "sequenceDiagram",
+      "    participant User",
+      "    participant CLI as ask.ts",
+      "    participant Loop as runAsk()",
+      "    User->>CLI: run",
+      "    CLI->>Loop: runAsk(opts)",
+      "    Loop-->>CLI: done",
+    ].join("\n");
+    const result = sanitizeMermaidCode(code);
+    expect(result).toContain("participant Loop_ as runAsk()");
+    expect(result).toContain("CLI->>Loop_: runAsk(opts)");
+    expect(result).toContain("Loop_-->>CLI: done");
+    expect(result).not.toMatch(/->>Loop:/);
+  });
+
+  it("renames reserved-keyword participants declared with actor", () => {
+    const code = [
+      "sequenceDiagram",
+      "    actor Note",
+      "    participant Svc",
+      "    Note->>Svc: ping",
+    ].join("\n");
+    const result = sanitizeMermaidCode(code);
+    expect(result).toContain("actor Note_");
+    expect(result).toContain("Note_->>Svc: ping");
+  });
+
+  it("leaves non-reserved participant IDs unchanged", () => {
+    const code = [
+      "sequenceDiagram",
+      "    participant Runner as runAsk()",
+      "    participant Svc",
+      "    Runner->>Svc: call",
+    ].join("\n");
+    const result = sanitizeMermaidCode(code);
+    expect(result).toContain("participant Runner as runAsk()");
+    expect(result).toContain("Runner->>Svc: call");
+    expect(result).not.toContain("Runner_");
+  });
+
+  it("does not mutate message text that happens to contain a reserved-id word", () => {
+    const code = [
+      "sequenceDiagram",
+      "    participant End",
+      "    participant Svc",
+      "    Svc->>End: End-to-end encryption enabled",
+      "    End-->>Svc: loop finished end of run",
+    ].join("\n");
+    const result = sanitizeMermaidCode(code);
+    expect(result).toContain("participant End_");
+    expect(result).toContain("Svc->>End_: End-to-end encryption enabled");
+    expect(result).toContain("End_-->>Svc: loop finished end of run");
+    expect(result).not.toContain("End_-to-end");
+    expect(result).not.toContain("End_ of run");
+  });
+
+  it("preserves `as` alias display text when renaming the ID", () => {
+    const code = [
+      "sequenceDiagram",
+      "    participant End as End Point Service",
+      "    participant Svc",
+      "    End->>Svc: ping",
+    ].join("\n");
+    const result = sanitizeMermaidCode(code);
+    expect(result).toContain("participant End_ as End Point Service");
+    expect(result).toContain("End_->>Svc: ping");
+    expect(result).not.toContain("End_ Point Service");
+  });
+
+  it("rewrites activate/deactivate/destroy and note references", () => {
+    const code = [
+      "sequenceDiagram",
+      "    participant Loop",
+      "    participant Svc",
+      "    activate Loop",
+      "    note over Loop,Svc: context",
+      "    note right of Loop: detail",
+      "    deactivate Loop",
+      "    destroy Loop",
+    ].join("\n");
+    const result = sanitizeMermaidCode(code);
+    expect(result).toContain("activate Loop_");
+    expect(result).toContain("note over Loop_,Svc: context");
+    expect(result).toContain("note right of Loop_: detail");
+    expect(result).toContain("deactivate Loop_");
+    expect(result).toContain("destroy Loop_");
+  });
+
+  it("does not touch comments or note body text", () => {
+    const code = [
+      "sequenceDiagram",
+      "    participant End",
+      "    participant Svc",
+      "    %% End-of-life handling",
+      "    note over End,Svc: End-of-transaction marker",
+    ].join("\n");
+    const result = sanitizeMermaidCode(code);
+    expect(result).toContain("%% End-of-life handling");
+    expect(result).toContain("note over End_,Svc: End-of-transaction marker");
+  });
+
+  it("picks a non-colliding suffix when the `_` name is already taken", () => {
+    const code = [
+      "sequenceDiagram",
+      "    participant Loop",
+      "    participant Loop_",
+      "    Loop->>Loop_: call",
+    ].join("\n");
+    const result = sanitizeMermaidCode(code);
+    expect(result).toContain("participant Loop__");
+    expect(result).toContain("participant Loop_");
+    expect(result).toContain("Loop__->>Loop_: call");
+  });
+
+  it("leaves alias text untouched when the ID is not reserved", () => {
+    const code = [
+      "sequenceDiagram",
+      "    participant Runner as runAsk() tool loop",
+      "    participant Svc",
+      "    Runner->>Svc: call",
+    ].join("\n");
+    const result = sanitizeMermaidCode(code);
+    expect(result).toContain("participant Runner as runAsk() tool loop");
+  });
 });
 
 describe("extractNodeLabels", () => {
