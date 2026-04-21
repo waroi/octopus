@@ -15,6 +15,7 @@ import {
   upsertFeedbackPattern,
 } from "@/lib/qdrant";
 import { extractAllMermaidBlocks, extractNodeLabels, DIAGRAM_TYPE_LABELS } from "@/lib/mermaid-utils";
+import { loadQueueConfig, computeStaleReclaimMs } from "@/lib/queue";
 import { createEmbeddings } from "@/lib/embeddings";
 import { generateSparseVector } from "@/lib/sparse-vector";
 import { rerankDocuments } from "@/lib/reranker";
@@ -593,16 +594,29 @@ export async function processReview(pullRequestId: string): Promise<void> {
     return;
   }
 
-  // Guard against duplicate processing (e.g. pg-boss jobs replicated to standby DB).
-  // Use atomic UPDATE with WHERE to claim the review — only one server can win.
+  // Guard against duplicate processing (e.g. pg-boss jobs replicated to standby DB,
+  // or webhook retries). Use atomic UPDATE with WHERE to claim the review — only one
+  // server can win. "reviewing" is NOT in the fresh-claim list because that would let
+  // a second worker match an in-flight review and both would post comments. Stuck
+  // reviews are recovered via a separate stale-claim path keyed on updatedAt.
   const serverId = process.env.OCTOPUS_SERVER_ID || "unknown";
   if (pr.status === "completed") {
     console.log(`[reviewer] PR ${pullRequestId} already completed, skipping`);
     return;
   }
+  // Stale threshold must exceed the pg-boss job timeout so we don't race
+  // with a still-running worker that pg-boss is about to kill for timing out.
+  const queueConfig = await loadQueueConfig();
+  const staleBefore = new Date(Date.now() - computeStaleReclaimMs(queueConfig.reviewTimeoutSeconds));
   const claimed = await prisma.pullRequest.updateMany({
-    where: { id: pullRequestId, status: { in: ["pending", "queued", "failed", "reviewing"] } },
-    data: { status: "reviewing" },
+    where: {
+      id: pullRequestId,
+      OR: [
+        { status: { in: ["pending", "queued", "failed"] } },
+        { status: "reviewing", updatedAt: { lt: staleBefore } },
+      ],
+    },
+    data: { status: "reviewing", updatedAt: new Date() },
   });
   if (claimed.count === 0) {
     console.log(`[reviewer] PR ${pullRequestId} already claimed by another server, skipping on '${serverId}'`);
