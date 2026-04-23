@@ -1,0 +1,52 @@
+# Copilot cloud agent pre-setup steps
+#
+# These steps run inside the Copilot agent job BEFORE the agent starts its
+# "Processing Request" phase.  The primary goal is to ensure the repository
+# workspace ($GITHUB_WORKSPACE) exists and contains a valid git checkout before
+# the agent's own internal git operations run.
+#
+# Why checkout here?
+#   GitHub's Git transport layer can return transient HTTP 500/502 errors
+#   (observed: "RPC failed; HTTP 500 curl 22 The requested URL returned error:
+#   500" / "fatal: expected 'packfile'").  Without a pre-populated workspace the
+#   Copilot agent's own clone attempt fails and the whole job dies before any
+#   useful work can happen.  Using actions/checkout@v4 here pre-populates the
+#   workspace; the action handles GITHUB_TOKEN auth and has its own internal
+#   retry plumbing so transient network errors are handled automatically.
+
+steps:
+  # Ensure the workspace directory exists before any git operation.
+  # If a previous (failed) checkout attempt deleted the partially-created
+  # directory the bash shell's own CWD becomes invalid, which causes every
+  # subsequent git command to error with "Unable to read current working
+  # directory: No such file or directory".  Creating the directory here
+  # prevents that cascade failure.
+  - name: Ensure workspace directory exists
+    shell: bash
+    run: mkdir -p "$GITHUB_WORKSPACE"
+
+  # Use actions/checkout@v4 (preferred over a raw `git clone`) because it
+  # handles GITHUB_TOKEN injection, retries, and correct working-directory
+  # setup.  This pre-populates the workspace so the Copilot agent can do a
+  # fast `git fetch` rather than a full clone, reducing the window for
+  # transient network errors.
+  - name: Checkout repository
+    uses: actions/checkout@v4
+    with:
+      fetch-depth: 1
+
+  # Fail early with a clear, actionable message if checkout did not populate
+  # the workspace.  This prevents cascading "No such file or directory" errors
+  # in every subsequent step and makes the root cause immediately obvious in
+  # the job log.
+  - name: Verify workspace exists
+    shell: bash
+    run: |
+      set -euo pipefail
+      if [ ! -d "$GITHUB_WORKSPACE" ]; then
+        echo "::error::GITHUB_WORKSPACE ('$GITHUB_WORKSPACE') does not exist after checkout." \
+             "All subsequent steps will fail. Check the 'Checkout repository' step above for errors."
+        exit 1
+      fi
+      echo "Workspace verified: $GITHUB_WORKSPACE"
+      ls -la "$GITHUB_WORKSPACE"

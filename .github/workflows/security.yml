@@ -11,11 +11,92 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # -----------------------------------------------------------------------
+      # Why retry logic?
+      #   GitHub's Git transport layer can return transient HTTP 500/502 errors
+      #   ("RPC failed; HTTP 500 / fatal: expected 'packfile'").  A failed clone
+      #   can delete the partially-created workspace directory, causing every
+      #   subsequent step to fail with "No such file or directory".  We apply
+      #   up to 5 attempts with exponential back-off (10 s → 20 s → 40 s → 80 s)
+      #   before giving up.
+      # -----------------------------------------------------------------------
+
+      # Ensure the workspace directory exists before any git operation.
+      # If a prior (failed) clone attempt removed the partially-created dir the
+      # runner shell's own CWD becomes unreadable, which breaks every following
+      # git invocation with "Unable to read current working directory".
+      - name: Ensure workspace directory exists
+        shell: bash
+        run: mkdir -p "$GITHUB_WORKSPACE"
+
+      # Prefer actions/checkout@v4 (handles token injection and has its own
+      # retry plumbing).  continue-on-error lets us add an explicit retry loop
+      # for the transient HTTP 500/502 errors that slip through the action.
+      - name: Checkout repository (attempt 1 via actions/checkout)
+        id: checkout
+        uses: actions/checkout@v4
+        continue-on-error: true
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 2
-      
+
+      # Only runs if actions/checkout@v4 failed above.
+      # Retries 4 more times (total 5 attempts) using git directly with
+      # exponential back-off to handle transient server errors.
+      - name: Checkout repository (retry 2–5 on failure)
+        if: steps.checkout.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET_REF="${{ github.event.pull_request.head.sha || github.sha }}"
+          attempt=2
+          max_attempts=5
+          delay=10  # attempts 2-5 use 10 s, 20 s, 40 s, 80 s back-off
+
+          while [ "$attempt" -le "$max_attempts" ]; do
+            echo "::warning::Checkout failed; retry $attempt/$max_attempts in ${delay}s …"
+            sleep "$delay"
+            delay=$((delay * 2))
+
+            # Clean up any partial checkout before retrying.
+            rm -rf "${GITHUB_WORKSPACE:?}"
+            mkdir -p "$GITHUB_WORKSPACE"
+
+            if git \
+                -c http.lowSpeedLimit=1000 \
+                -c http.lowSpeedTime=60 \
+                clone \
+                --depth 2 \
+                --no-tags \
+                "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+                "$GITHUB_WORKSPACE" \
+              && git -C "$GITHUB_WORKSPACE" fetch --depth 2 origin "$TARGET_REF" \
+              && git -C "$GITHUB_WORKSPACE" checkout "$TARGET_REF"; then
+              echo "Checkout succeeded on attempt $attempt."
+              exit 0
+            fi
+
+            attempt=$((attempt + 1))
+          done
+
+          echo "::error::Checkout failed after $max_attempts attempts. Giving up."
+          exit 1
+
+      # Fail early with a clear, actionable message if checkout did not
+      # populate the workspace.  Prevents cascading "No such file or directory"
+      # errors throughout the rest of the job.
+      - name: Verify workspace exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d "$GITHUB_WORKSPACE" ]; then
+            echo "::error::GITHUB_WORKSPACE ('$GITHUB_WORKSPACE') does not exist." \
+                 "The checkout step failed — check the logs above for the root cause."
+            exit 1
+          fi
+          echo "Workspace verified: $GITHUB_WORKSPACE"
+          ls -la "$GITHUB_WORKSPACE"
+
       - uses: anthropics/claude-code-security-review@main
         with:
           comment-pr: true
